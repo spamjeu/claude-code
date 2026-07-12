@@ -74,7 +74,7 @@
 <main>
   <section class="panel">
     <div class="row">
-      <input id="q" type="text" placeholder='Texte à chercher dans les cartes, ex: advantage' />
+      <input id="q" type="text" placeholder='Nom ou texte à chercher, ex: advantage ou Sabine' />
       <select id="set">
         <option value="">Tous les sets</option>
         <option value="ash" selected>Ashes of the Empire (ASH)</option>
@@ -150,14 +150,14 @@ function buildQuery(){
   if (raw.startsWith("raw:")) return raw.slice(4).trim();
 
   const parts = [];
-  if (raw) parts.push(`t:"${raw.replace(/"/g,'')}"`);
+  if (raw) parts.push(`"${raw.replace(/"/g,'')}"`);
   const set = $("#set").value;
   if (set) parts.push(`set:${set}`);
   const type = $("#type").value;
   if (type) parts.push(`ty:${type}`);
   const aspect = $("#aspect").value;
   if (aspect) parts.push(`a:${aspect}`);
-  if (!parts.length) parts.push('t:"advantage"');
+  if (!parts.length) parts.push('"advantage"');
   return parts.join(" AND ");
 }
 
@@ -273,8 +273,8 @@ function render(cards, term){
     el.innerHTML = `
       <div class="art">${img ? `<img loading="lazy" src="${img}" alt="${name}">` : `<div class="noimg">Pas d'image<br>disponible</div>`}</div>
       <div class="body">
-        <div class="name">${name}</div>
-        ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
+        <div class="name">${highlight(String(name), term)}</div>
+        ${subtitle ? `<div class="sub">${highlight(String(subtitle), term)}</div>` : ""}
         <div class="badges">
           ${set ? `<span class="badge">${String(set).toUpperCase()} ${number}</span>` : ""}
           ${type ? `<span class="badge">${type}</span>` : ""}
