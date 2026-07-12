@@ -165,7 +165,7 @@
       <span class="status" id="deckSyncStatus"></span>
     </div>
     <div class="row" style="margin-top:10px">
-      <input id="deckCardQ" type="text" placeholder="Nom de carte, ex: Sabine Wren" />
+      <input id="deckCardQ" type="text" placeholder="Nom de carte (sépare par des virgules pour plusieurs) — vide = tous les decks" />
       <select id="deckSort">
         <option value="likes">Trier par favoris ❤️</option>
         <option value="leader">Trier par leader (A-Z)</option>
@@ -481,7 +481,6 @@ deckGroupSel.addEventListener("change", () => { if (lastDeckResults.length) rend
 
 async function searchDecksByCard() {
   const q = deckCardQ.value.trim();
-  if (!q) return;
   deckSearchStatus.className = "status";
   deckSearchStatus.textContent = "Recherche…";
   deckResultsEl.innerHTML = "";
@@ -492,7 +491,9 @@ async function searchDecksByCard() {
     const decks = data.decks || [];
     lastDeckResults = decks;
     if (!decks.length) {
-      deckSearchStatus.textContent = "Aucun deck trouvé (importe d'abord la base, ou vérifie l'orthographe de la carte).";
+      deckSearchStatus.textContent = q
+        ? "Aucun deck trouvé (importe d'abord la base, ou vérifie l'orthographe des cartes)."
+        : "Base de decks locale vide — importe des decks d'abord.";
       return;
     }
     deckSearchStatus.textContent = `${decks.length} deck(s) trouvé(s).`;

@@ -153,39 +153,54 @@ function normalizeRef(ref) {
   return ref;
 }
 
+function matchesInDeck(deck, needle) {
+  const matches = [];
+  const check = (rawRef, role) => {
+    const ref = normalizeRef(rawRef);
+    if (ref && ref.name && ref.name.toLowerCase().includes(needle)) matches.push({ role, ...ref });
+  };
+  check(deck.leader, "Leader");
+  check(deck.secondLeader, "Leader 2");
+  check(deck.base, "Base");
+  for (const c of deck.cards || []) {
+    if (c.name && c.name.toLowerCase().includes(needle)) matches.push({ role: "Deck", ...c });
+  }
+  return matches;
+}
+
+function toResult(deck, matches) {
+  const leaderRef = normalizeRef(deck.leader);
+  const baseRef = normalizeRef(deck.base);
+  return {
+    deckId: deck.deckId,
+    deckName: deck.deckName,
+    authorName: deck.authorName,
+    deckFormat: deck.deckFormat,
+    likeCount: deck.likeCount,
+    publishDate: deck.publishDate,
+    leaderName: leaderRef && leaderRef.name,
+    leaderSet: leaderRef && leaderRef.set,
+    baseName: baseRef && baseRef.name,
+    colors: deck.colors || [],
+    matches,
+  };
+}
+
+// Comma-separate multiple card names to require all of them (AND) in the
+// same deck. An empty query lists every deck (e.g. to sort by favorites
+// without filtering by card).
 function findDecksByCard(query) {
   const decks = loadDecks();
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
+  const needles = query.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
   const results = [];
   for (const deck of Object.values(decks)) {
-    const matches = [];
-    const check = (rawRef, role) => {
-      const ref = normalizeRef(rawRef);
-      if (ref && ref.name && ref.name.toLowerCase().includes(needle)) matches.push({ role, ...ref });
-    };
-    check(deck.leader, "Leader");
-    check(deck.secondLeader, "Leader 2");
-    check(deck.base, "Base");
-    for (const c of deck.cards || []) {
-      if (c.name && c.name.toLowerCase().includes(needle)) matches.push({ role: "Deck", ...c });
+    if (!needles.length) {
+      results.push(toResult(deck, []));
+      continue;
     }
-    if (matches.length) {
-      const leaderRef = normalizeRef(deck.leader);
-      const baseRef = normalizeRef(deck.base);
-      results.push({
-        deckId: deck.deckId,
-        deckName: deck.deckName,
-        authorName: deck.authorName,
-        deckFormat: deck.deckFormat,
-        likeCount: deck.likeCount,
-        publishDate: deck.publishDate,
-        leaderName: leaderRef && leaderRef.name,
-        leaderSet: leaderRef && leaderRef.set,
-        baseName: baseRef && baseRef.name,
-        colors: deck.colors || [],
-        matches,
-      });
+    const matchesByNeedle = needles.map((needle) => matchesInDeck(deck, needle));
+    if (matchesByNeedle.every((m) => m.length > 0)) {
+      results.push(toResult(deck, matchesByNeedle.flat()));
     }
   }
   return results;
