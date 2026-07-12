@@ -110,9 +110,6 @@
         <option value="ash" selected>Ashes of the Empire (ASH)</option>
         <option value="lof">Legends of the Force (LOF)</option>
         <option value="jtl">Jump to Lightspeed (JTL)</option>
-        <option value="twi">Twilight of the Republic (TWI)</option>
-        <option value="shd">Shadows of the Galaxy (SHD)</option>
-        <option value="sor">Spark of Rebellion (SOR)</option>
       </select>
       <select id="type">
         <option value="">Tous les types</option>
@@ -216,7 +213,6 @@ function buildQuery(){
   if (type) parts.push(`ty:${type}`);
   const aspect = $("#aspect").value;
   if (aspect) parts.push(`a:${aspect}`);
-  if (!parts.length) parts.push('t:"advantage"');
   return parts.join(" AND ");
 }
 
@@ -287,9 +283,14 @@ function highlight(text, term){
 async function search(){
   const query = buildQuery();
   const termForHighlight = $("#q").value.trim().replace(/^raw:/,'');
+  resultsEl.innerHTML = "";
+  if (!query){
+    statusEl.className = "status";
+    statusEl.textContent = "Saisis un texte ou choisis un filtre (set / type / aspect) avant de rechercher.";
+    return;
+  }
   statusEl.className = "status";
   statusEl.textContent = `Recherche en cours… (q=${query})`;
-  resultsEl.innerHTML = "";
 
   const url = `${API}?q=${encodeURIComponent(query)}&format=json`;
   try{
@@ -506,9 +507,6 @@ async function searchDecksByCard() {
 deckSearchBtn.addEventListener("click", searchDecksByCard);
 deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });
 
-// Recherche par défaut au chargement : cartes "advantage" du set ASH
-PRESETS["advantage-ash"]();
-search();
 </script>
 </body>
 </html>

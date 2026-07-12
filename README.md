@@ -22,12 +22,15 @@ node server.js
 # puis ouvre http://localhost:8787
 ```
 
-La recherche par défaut au chargement montre toutes les cartes du set ASH dont le
-texte mentionne "advantage". Tu peux ensuite :
+Aucune recherche ne se lance au chargement — saisis un texte ou choisis un filtre puis
+lance la recherche. Tu peux :
 
-- taper un texte libre dans le champ de recherche (il est transformé en `t:"..."` côté API),
-- filtrer par set / type / aspect,
-- utiliser les raccourcis ("Advantage (ASH)", "Advantage tous sets", "Upgrades ASH", "gain + advantage"),
+- taper un texte libre dans le champ de recherche (il matche le nom **et** le texte de
+  la carte côté API),
+- filtrer par set (ASH / LOF / JTL — les sets antérieurs SOR/SHD/TWI sont dépréciés et
+  volontairement absents du filtre) / type / aspect,
+- utiliser les raccourcis liés au mécanisme Advantage ("Advantage (ASH)", "Advantage tous
+  sets", "Upgrades ASH", "gain + advantage"),
 - taper `raw:<requête>` pour passer directement une requête à la syntaxe complète de l'API
   (voir [swu-db.com/syntax](https://www.swu-db.com/syntax)).
 
