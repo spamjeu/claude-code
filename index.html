@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SWU Card &amp; Text Finder — Ashes of the Empire</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171b21; --panel2:#1e232b; --border:#2a3140;
+    --text:#e8ecf1; --muted:#8b95a5; --accent:#e0b34d; --accent2:#5da6ff;
+    --good:#3fb968; --bad:#e2564f; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f5f6f8; --panel:#ffffff; --panel2:#f0f1f4; --border:#dde1e7;
+      --text:#1a1e24; --muted:#5b6472; --accent:#a8791f; --accent2:#2266bb; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.4}
+  header{padding:24px 20px 8px;max-width:1200px;margin:0 auto}
+  h1{font-size:1.4rem;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:.92rem;margin-bottom:14px}
+  main{max-width:1200px;margin:0 auto;padding:0 20px 60px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  input[type=text]{flex:1;min-width:220px;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:10px 12px;font-size:.95rem}
+  select{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;font-size:.9rem}
+  button{cursor:pointer;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);
+    padding:9px 14px;font-size:.9rem}
+  button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
+  button.chip{background:transparent;border:1px solid var(--accent);color:var(--accent);font-size:.82rem;padding:6px 12px;border-radius:999px}
+  button.chip:hover{background:var(--accent);color:#111}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .hint{color:var(--muted);font-size:.8rem;margin-top:8px}
+  code{font-family:var(--mono);background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:.85em}
+  .status{font-size:.85rem;color:var(--muted);margin:6px 2px}
+  .status.err{color:var(--bad)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .card .art{width:100%;aspect-ratio:5/7;background:var(--panel2);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .card .art img{width:100%;height:100%;object-fit:cover}
+  .card .art .noimg{color:var(--muted);font-size:.75rem;text-align:center;padding:10px}
+  .card .body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card .name{font-weight:700;font-size:.95rem}
+  .card .sub{font-size:.78rem;color:var(--muted);margin:0}
+  .badges{display:flex;flex-wrap:wrap;gap:5px}
+  .badge{font-size:.7rem;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;color:var(--muted)}
+  .cardtext{font-size:.78rem;color:var(--text);background:var(--panel2);border-radius:6px;padding:7px 8px;max-height:140px;overflow:auto;white-space:pre-wrap}
+  mark{background:var(--accent);color:#111;border-radius:3px;padding:0 2px}
+  .links{display:flex;gap:8px;margin-top:auto;padding-top:4px}
+  .links a{font-size:.75rem;color:var(--accent2);text-decoration:none}
+  .links a:hover{text-decoration:underline}
+  details{margin-top:2px}
+  details summary{font-size:.7rem;color:var(--muted);cursor:pointer}
+  details pre{font-size:.65rem;max-height:160px;overflow:auto;background:var(--panel2);padding:6px;border-radius:6px}
+  footer{max-width:1200px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:.8rem}
+  footer a{color:var(--accent2)}
+  .meta-links{display:flex;flex-wrap:wrap;gap:10px}
+  .meta-links a{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);text-decoration:none;font-size:.85rem}
+  .meta-links a:hover{border-color:var(--accent2)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔎 SWU Card &amp; Text Finder</h1>
+  <div class="sub">
+    Recherche de cartes <em>Star Wars: Unlimited</em> par texte / mot-clé plutôt que par leader —
+    pensé pour repérer les cartes liées au mécanisme <strong>Advantage</strong> (jeton d'avantage temporaire, +1/+0)
+    introduit dans <strong>Ashes of the Empire (ASH)</strong>.
+    Données : API publique <a href="https://www.swu-db.com/api" target="_blank" rel="noopener">api.swu-db.com</a>.
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="row">
+      <input id="q" type="text" placeholder='Texte à chercher dans les cartes, ex: advantage' />
+      <select id="set">
+        <option value="">Tous les sets</option>
+        <option value="ash" selected>Ashes of the Empire (ASH)</option>
+        <option value="lof">Legends of the Force (LOF)</option>
+        <option value="jtl">Jump to Lightspeed (JTL)</option>
+        <option value="twi">Twilight of the Republic (TWI)</option>
+        <option value="shd">Shadows of the Galaxy (SHD)</option>
+        <option value="sor">Spark of Rebellion (SOR)</option>
+      </select>
+      <select id="type">
+        <option value="">Tous les types</option>
+        <option value="unit">Unit</option>
+        <option value="upgrade">Upgrade</option>
+        <option value="event">Event</option>
+        <option value="leader">Leader</option>
+        <option value="base">Base</option>
+      </select>
+      <select id="aspect">
+        <option value="">Tous les aspects</option>
+        <option value="vigilance">Vigilance</option>
+        <option value="command">Command</option>
+        <option value="aggression">Aggression</option>
+        <option value="cunning">Cunning</option>
+        <option value="heroism">Heroism</option>
+        <option value="villainy">Villainy</option>
+      </select>
+      <button class="primary" id="go">Rechercher</button>
+    </div>
+    <div class="chips">
+      <button class="chip" data-preset="advantage-ash">🃏 Cartes "Advantage" (ASH)</button>
+      <button class="chip" data-preset="advantage-any">🌐 "Advantage" tous sets</button>
+      <button class="chip" data-preset="upgrades-ash">⬆️ Toutes les Upgrades ASH</button>
+      <button class="chip" data-preset="grant-token">🎯 "gain" + "advantage"</button>
+    </div>
+    <div class="hint">
+      Syntaxe libre supportée (transmise telle quelle à l'API si tu préfixes ta recherche par <code>raw:</code>) :
+      <code>t:</code> texte, <code>ty:</code> type, <code>a:</code> aspect, <code>ar:</code> arena, <code>r:</code> rareté,
+      <code>set:</code> set, <code>c=</code>/<code>p=</code>/<code>h=</code> coût/power/HP, <code>AND</code>/<code>OR</code>, parenthèses.
+      Doc complète : <a href="https://www.swu-db.com/syntax" target="_blank" rel="noopener">swu-db.com/syntax</a>.
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="grid" id="results"></section>
+
+  <section class="panel" style="margin-top:20px">
+    <strong>Aller plus loin — croiser avec les decks</strong>
+    <p class="sub" style="margin-top:6px">
+      Cet outil cherche des <em>cartes</em> par texte. Pour voir dans quels decks une carte trouvée ci-dessus est jouée,
+      ouvre sa page SWUDB (lien "Carte" sur chaque résultat — les pages carte listent en général les decks qui l'utilisent),
+      ou croise manuellement avec :
+    </p>
+    <div class="meta-links">
+      <a href="https://swudb.com/decks/hot" target="_blank" rel="noopener">🔥 SWUDB — Decks du moment</a>
+      <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">📊 SWU Meta Stats — Meta Premier (ASH)</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Outil non officiel, données via l'API publique <a href="https://www.swu-db.com" target="_blank" rel="noopener">swu-db.com</a>.
+  Requêtes faites directement depuis ton navigateur (aucune donnée envoyée ailleurs).
+</footer>
+
+<script>
+const API = "https://api.swu-db.com/cards/search";
+const $ = (sel) => document.querySelector(sel);
+const resultsEl = $("#results");
+const statusEl = $("#status");
+
+function buildQuery(){
+  const raw = $("#q").value.trim();
+  if (raw.startsWith("raw:")) return raw.slice(4).trim();
+
+  const parts = [];
+  if (raw) parts.push(`t:"${raw.replace(/"/g,'')}"`);
+  const set = $("#set").value;
+  if (set) parts.push(`set:${set}`);
+  const type = $("#type").value;
+  if (type) parts.push(`ty:${type}`);
+  const aspect = $("#aspect").value;
+  if (aspect) parts.push(`a:${aspect}`);
+  if (!parts.length) parts.push('t:"advantage"');
+  return parts.join(" AND ");
+}
+
+const PRESETS = {
+  "advantage-ash": () => { $("#q").value = "advantage"; $("#set").value = "ash"; $("#type").value=""; $("#aspect").value=""; },
+  "advantage-any": () => { $("#q").value = "advantage"; $("#set").value = ""; $("#type").value=""; $("#aspect").value=""; },
+  "upgrades-ash": () => { $("#q").value = ""; $("#set").value = "ash"; $("#type").value="upgrade"; $("#aspect").value=""; },
+  "grant-token": () => { $("#q").value = 'raw:(t:"gain" AND t:"advantage")'; $("#set").value=""; $("#type").value=""; $("#aspect").value=""; },
+};
+
+document.querySelectorAll("[data-preset]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{ PRESETS[btn.dataset.preset](); search(); });
+});
+$("#go").addEventListener("click", search);
+$("#q").addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+
+function pick(obj, patterns){
+  const keys = Object.keys(obj || {});
+  for (const p of patterns){
+    const hit = keys.find(k => k.toLowerCase() === p.toLowerCase());
+    if (hit && obj[hit] !== undefined && obj[hit] !== null && obj[hit] !== "") return obj[hit];
+  }
+  for (const p of patterns){
+    const hit = keys.find(k => k.toLowerCase().includes(p.toLowerCase()));
+    if (hit && obj[hit] !== undefined && obj[hit] !== null && obj[hit] !== "") return obj[hit];
+  }
+  return undefined;
+}
+
+function findImage(card){
+  const keys = Object.keys(card || {});
+  for (const k of keys){
+    const v = card[k];
+    if (typeof v === "string" && /^https?:\/\//.test(v) && /(art|image|img|url)/i.test(k)) return v;
+  }
+  // nested front/back objects sometimes hold art urls
+  for (const k of keys){
+    const v = card[k];
+    if (v && typeof v === "object" && !Array.isArray(v)){
+      const nested = findImage(v);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function extractArray(data){
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
+  for (const k of ["Data","data","Cards","cards","results","Results","items","Items"]){
+    if (Array.isArray(data[k])) return data[k];
+  }
+  for (const k of Object.keys(data)){
+    if (Array.isArray(data[k])) return data[k];
+  }
+  return [];
+}
+
+function highlight(text, term){
+  if (!text) return "";
+  if (!term) return text;
+  try{
+    const re = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, "ig");
+    return text.replace(re, "<mark>$1</mark>");
+  }catch{ return text; }
+}
+
+async function search(){
+  const query = buildQuery();
+  const termForHighlight = $("#q").value.trim().replace(/^raw:/,'');
+  statusEl.className = "status";
+  statusEl.textContent = `Recherche en cours… (q=${query})`;
+  resultsEl.innerHTML = "";
+
+  const url = `${API}?q=${encodeURIComponent(query)}&format=json`;
+  try{
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const cards = extractArray(data);
+    if (!cards.length){
+      statusEl.textContent = "Aucune carte trouvée pour cette recherche.";
+      return;
+    }
+    statusEl.textContent = `${cards.length} carte(s) trouvée(s) — q=${query}`;
+    render(cards, termForHighlight);
+  }catch(err){
+    statusEl.className = "status err";
+    statusEl.textContent = `Erreur de requête vers l'API (${err.message}). ` +
+      `Si ça persiste, c'est probablement un blocage CORS/réseau côté navigateur — ` +
+      `essaie de servir ce fichier via un petit serveur local (ex: "npx serve .") plutôt que de l'ouvrir en file://.`;
+  }
+}
+
+function render(cards, term){
+  resultsEl.innerHTML = "";
+  for (const card of cards){
+    const name = pick(card, ["Name","name"]) || "?";
+    const subtitle = pick(card, ["Subtitle","subtitle"]) || "";
+    const set = pick(card, ["Set","set"]) || "";
+    const number = pick(card, ["Number","number","CardNumber"]) || "";
+    const type = pick(card, ["Type","type"]) || "";
+    const cost = pick(card, ["Cost","cost"]);
+    const power = pick(card, ["Power","power"]);
+    const hp = pick(card, ["HP","Hp","hp"]);
+    const aspects = pick(card, ["Aspects","aspects"]);
+    const text = pick(card, ["FrontText","Text","text","Rules","OracleText"]) || "";
+    const img = findImage(card);
+
+    const el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML = `
+      <div class="art">${img ? `<img loading="lazy" src="${img}" alt="${name}">` : `<div class="noimg">Pas d'image<br>disponible</div>`}</div>
+      <div class="body">
+        <div class="name">${name}</div>
+        ${subtitle ? `<div class="sub">${subtitle}</div>` : ""}
+        <div class="badges">
+          ${set ? `<span class="badge">${String(set).toUpperCase()} ${number}</span>` : ""}
+          ${type ? `<span class="badge">${type}</span>` : ""}
+          ${cost !== undefined ? `<span class="badge">Coût ${cost}</span>` : ""}
+          ${power !== undefined ? `<span class="badge">PWR ${power}</span>` : ""}
+          ${hp !== undefined ? `<span class="badge">HP ${hp}</span>` : ""}
+          ${Array.isArray(aspects) ? aspects.map(a=>`<span class="badge">${a}</span>`).join("") : (aspects ? `<span class="badge">${aspects}</span>` : "")}
+        </div>
+        ${text ? `<div class="cardtext">${highlight(String(text), term)}</div>` : ""}
+        <div class="links">
+          ${set && number ? `<a href="https://swudb.com/card/${String(set).toUpperCase()}/${number}" target="_blank" rel="noopener">Carte ↗</a>` : ""}
+        </div>
+        <details>
+          <summary>JSON brut</summary>
+          <pre>${JSON.stringify(card, null, 1)}</pre>
+        </details>
+      </div>
+    `;
+    resultsEl.appendChild(el);
+  }
+}
+
+// Recherche par défaut au chargement : cartes "advantage" du set ASH
+PRESETS["advantage-ash"]();
+search();
+</script>
+</body>
+</html>
