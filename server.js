@@ -51,6 +51,41 @@ function saveDecks(decks) {
 
 let syncInProgress = false;
 
+function cardRef(card) {
+  if (!card) return null;
+  return {
+    name: card.cardName,
+    title: card.title || "",
+    set: card.defaultExpansionAbbreviation || "",
+    number: card.defaultCardNumber || "",
+  };
+}
+
+// swudb.com's own API only exposes aspects as undocumented numeric codes, so
+// colors are resolved from the official api.swu-db.com card data instead
+// (one fetch per set, cached for the process lifetime, keyed by card number).
+const setAspectsCache = new Map();
+
+async function getSetAspects(set) {
+  const key = set.toLowerCase();
+  if (setAspectsCache.has(key)) return setAspectsCache.get(key);
+  const map = new Map();
+  try {
+    const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
+    for (const c of data.data || []) map.set(c.Number, c.Aspects || []);
+  } catch (err) {
+    console.error(`Could not load aspects for set ${set}: ${err.message}`);
+  }
+  setAspectsCache.set(key, map);
+  return map;
+}
+
+async function resolveAspects(ref) {
+  if (!ref || !ref.set || !ref.number) return [];
+  const map = await getSetAspects(ref.set);
+  return map.get(ref.number) || [];
+}
+
 async function syncDecks({ format, limit }) {
   if (syncInProgress) throw new Error("Un import est déjà en cours.");
   syncInProgress = true;
@@ -70,18 +105,25 @@ async function syncDecks({ format, limit }) {
         await sleep(SYNC_DELAY_MS);
         try {
           const deck = await httpsGetJson(`https://swudb.com/api/deck/${summary.deckId}`);
+          const leaderRef = cardRef(deck.leader);
+          const secondLeaderRef = cardRef(deck.secondLeader);
+          const baseRef = cardRef(deck.base);
+          const [leaderAspects, secondLeaderAspects, baseAspects] = await Promise.all([
+            resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef),
+          ]);
           decks[summary.deckId] = {
             deckId: summary.deckId,
             deckName: deck.deckName,
             authorName: deck.authorName,
             deckFormat: deck.deckFormat,
-            leader: deck.leader && deck.leader.cardName,
-            secondLeader: deck.secondLeader && deck.secondLeader.cardName,
-            base: deck.base && deck.base.cardName,
+            leader: leaderRef,
+            secondLeader: secondLeaderRef,
+            base: baseRef,
+            colors: [...new Set([...leaderAspects, ...secondLeaderAspects, ...baseAspects])],
             likeCount: deck.likeCount,
             publishDate: deck.publishDate,
             cards: (deck.shuffledDeck || []).map((entry) => ({
-              name: entry.card.cardName,
+              ...cardRef(entry.card),
               count: entry.count,
             })),
           };
@@ -102,21 +144,63 @@ async function syncDecks({ format, limit }) {
   }
 }
 
+// Older data/decks.json files stored leader/base as a plain name string
+// instead of a {name,title,set,number} ref — normalize so re-searching an
+// unsynced file doesn't crash the server.
+function normalizeRef(ref) {
+  if (!ref) return null;
+  if (typeof ref === "string") return { name: ref, title: "", set: "", number: "" };
+  return ref;
+}
+
 function findDecksByCard(query) {
   const decks = loadDecks();
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return Object.values(decks)
-    .map((deck) => {
-      const match = deck.cards.find((c) => c.name.toLowerCase().includes(needle));
-      if (!match) return null;
-      const { cards, ...summary } = deck;
-      return { ...summary, matchedCard: match.name, matchedCount: match.count };
-    })
-    .filter(Boolean);
+  const results = [];
+  for (const deck of Object.values(decks)) {
+    const matches = [];
+    const check = (rawRef, role) => {
+      const ref = normalizeRef(rawRef);
+      if (ref && ref.name && ref.name.toLowerCase().includes(needle)) matches.push({ role, ...ref });
+    };
+    check(deck.leader, "Leader");
+    check(deck.secondLeader, "Leader 2");
+    check(deck.base, "Base");
+    for (const c of deck.cards || []) {
+      if (c.name && c.name.toLowerCase().includes(needle)) matches.push({ role: "Deck", ...c });
+    }
+    if (matches.length) {
+      const leaderRef = normalizeRef(deck.leader);
+      const baseRef = normalizeRef(deck.base);
+      results.push({
+        deckId: deck.deckId,
+        deckName: deck.deckName,
+        authorName: deck.authorName,
+        deckFormat: deck.deckFormat,
+        likeCount: deck.likeCount,
+        publishDate: deck.publishDate,
+        leaderName: leaderRef && leaderRef.name,
+        leaderSet: leaderRef && leaderRef.set,
+        baseName: baseRef && baseRef.name,
+        colors: deck.colors || [],
+        matches,
+      });
+    }
+  }
+  return results;
 }
 
 const server = http.createServer((req, res) => {
+  try {
+    handleRequest(req, res);
+  } catch (err) {
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+});
+
+function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
   if (url.pathname === "/api/cards/search") {
@@ -153,6 +237,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === "/api/decks" && req.method === "DELETE") {
+    if (syncInProgress) {
+      res.writeHead(409, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Un import est en cours, réessaie une fois terminé." }));
+      return;
+    }
+    fs.rmSync(DECKS_FILE, { force: true });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ cleared: true }));
+    return;
+  }
+
   let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
   filePath = path.join(ROOT, path.normalize(filePath).replace(/^(\.\.[/\\])+/, ""));
 
@@ -167,7 +263,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": type });
     res.end(data);
   });
-});
+}
 
 server.listen(PORT, () => {
   console.log(`SWU Card Finder running at http://localhost:${PORT}`);

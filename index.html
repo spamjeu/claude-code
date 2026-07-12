@@ -63,6 +63,25 @@
   .deckrow a{color:var(--accent2);text-decoration:none;font-weight:600}
   .deckrow a:hover{text-decoration:underline}
   .deckrow .muted{color:var(--muted)}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+  .tab{background:transparent;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;
+    padding:10px 16px;font-size:.9rem;font-weight:600;color:var(--muted)}
+  .tab.active{background:var(--panel);border-color:var(--border);color:var(--text)}
+  .tabpanel[hidden]{display:none}
+  button.danger{color:var(--bad);border-color:var(--bad)}
+  button.danger:hover{background:var(--bad);color:#fff}
+  .deckgroup{margin-top:16px}
+  .deckgroup:first-child{margin-top:0}
+  .deckgroup-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.9rem;margin-bottom:8px;
+    padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .deckgroup-title .muted{font-weight:400;color:var(--muted);font-size:.8rem}
+  .aspect-dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
+  .aspect-Vigilance{background:#2266bb}
+  .aspect-Command{background:#2f9e44}
+  .aspect-Aggression{background:#c92a2a}
+  .aspect-Cunning{background:#d4a017}
+  .aspect-Heroism{background:#d8dce2}
+  .aspect-Villainy{background:#1a1a1a}
 </style>
 </head>
 <body>
@@ -77,6 +96,12 @@
 </header>
 
 <main>
+  <div class="tabs">
+    <button class="tab active" data-tab="cards">🔎 Recherche de cartes</button>
+    <button class="tab" data-tab="decks">🗂️ Base de decks</button>
+  </div>
+
+  <section class="tabpanel" data-tabpanel="cards">
   <section class="panel">
     <div class="row">
       <input id="q" type="text" placeholder='Nom ou texte à chercher, ex: advantage ou Sabine' />
@@ -124,8 +149,10 @@
   </section>
 
   <section class="grid" id="results"></section>
+  </section>
 
-  <section class="panel" style="margin-top:20px">
+  <section class="tabpanel" data-tabpanel="decks" hidden>
+  <section class="panel">
     <strong>🗂️ Base de decks locale (Premier)</strong>
     <p class="sub" style="margin-top:6px">
       Indexe localement des decks publiés sur SWUDB (format Premier) pour retrouver ceux qui jouent une carte donnée.
@@ -134,19 +161,32 @@
     </p>
     <div class="row">
       <button id="deckSync">Importer / mettre à jour (100 derniers decks Premier)</button>
+      <button class="danger" id="deckClear">🗑️ Vider la base locale</button>
       <span class="status" id="deckSyncStatus"></span>
     </div>
     <div class="row" style="margin-top:10px">
       <input id="deckCardQ" type="text" placeholder="Nom de carte, ex: Sabine Wren" />
+      <select id="deckSort">
+        <option value="likes">Trier par favoris ❤️</option>
+        <option value="leader">Trier par leader (A-Z)</option>
+      </select>
+      <select id="deckGroup">
+        <option value="none">Pas de regroupement</option>
+        <option value="leader">Regrouper par couleurs + leader</option>
+        <option value="set">Regrouper par extension de la carte</option>
+      </select>
       <button class="primary" id="deckSearch">Chercher les decks</button>
     </div>
     <div class="status" id="deckSearchStatus"></div>
     <div id="deckResults"></div>
     <div class="hint">
-      Source des données : API interne (non documentée) de <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>.
+      L'import ne fait que fusionner/mettre à jour — utilise "Vider la base locale" si tu veux repartir de zéro
+      (par ex. après un changement de format de données). Source : API interne (non documentée) de
+      <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>.
       Voir aussi <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">SWU Meta Stats</a>
       pour les stats de méta globales.
     </div>
+  </section>
   </section>
 </main>
 
@@ -316,13 +356,27 @@ function render(cards, term){
   }
 }
 
+// --- Onglets ---
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tabpanel").forEach((p) => (p.hidden = true));
+    btn.classList.add("active");
+    document.querySelector(`.tabpanel[data-tabpanel="${btn.dataset.tab}"]`).hidden = false;
+  });
+});
+
 // --- Base de decks locale ---
 const deckSyncBtn = $("#deckSync");
+const deckClearBtn = $("#deckClear");
 const deckSyncStatus = $("#deckSyncStatus");
 const deckCardQ = $("#deckCardQ");
 const deckSearchBtn = $("#deckSearch");
 const deckSearchStatus = $("#deckSearchStatus");
 const deckResultsEl = $("#deckResults");
+const deckSortSel = $("#deckSort");
+const deckGroupSel = $("#deckGroup");
+let lastDeckResults = [];
 
 deckSyncBtn.addEventListener("click", async () => {
   deckSyncBtn.disabled = true;
@@ -341,6 +395,90 @@ deckSyncBtn.addEventListener("click", async () => {
   }
 });
 
+deckClearBtn.addEventListener("click", async () => {
+  if (!confirm("Vider toute la base de decks locale ? Cette action est irréversible.")) return;
+  deckClearBtn.disabled = true;
+  deckSyncStatus.className = "status";
+  deckSyncStatus.textContent = "Suppression…";
+  try {
+    const res = await fetch("/api/decks", { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    deckSyncStatus.textContent = "Base de decks locale vidée.";
+    deckResultsEl.innerHTML = "";
+    deckSearchStatus.textContent = "";
+  } catch (err) {
+    deckSyncStatus.className = "status err";
+    deckSyncStatus.textContent = `Erreur : ${err.message}`;
+  } finally {
+    deckClearBtn.disabled = false;
+  }
+});
+
+function sortDecks(decks){
+  const sorted = [...decks];
+  if (deckSortSel.value === "leader") {
+    sorted.sort((a, b) => (a.leaderName || "").localeCompare(b.leaderName || ""));
+  } else {
+    sorted.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+  }
+  return sorted;
+}
+
+function colorDots(colors){
+  if (!colors || !colors.length) return "";
+  return colors.map((c) => `<span class="aspect-dot aspect-${c}" title="${c}"></span>`).join("");
+}
+
+function deckRowHtml(d){
+  return `
+    <div class="deckrow">
+      ${colorDots(d.colors)}
+      <a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a>
+      <span class="muted">par ${d.authorName}</span>
+      <span class="muted">— ${d.leaderName || "?"}${d.baseName ? " / " + d.baseName : ""}</span>
+      <span class="badge">❤️ ${d.likeCount || 0}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;flex-basis:100%">
+        ${d.matches.map((m) => `<span class="badge">${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function groupKeyFor(d){
+  if (deckGroupSel.value === "leader") {
+    const colors = [...(d.colors || [])].sort().join("/") || "Sans couleur";
+    return { key: `${colors}__${d.leaderName || "?"}`, label: `${colorDots(d.colors)} ${d.leaderName || "Leader inconnu"}` };
+  }
+  if (deckGroupSel.value === "set") {
+    const set = (d.matches[0] && d.matches[0].set) || "?";
+    return { key: set, label: `Extension ${set}` };
+  }
+  return null;
+}
+
+function renderDeckResults(decks){
+  const sorted = sortDecks(decks);
+  if (deckGroupSel.value === "none") {
+    deckResultsEl.innerHTML = `<div class="decklist">${sorted.map(deckRowHtml).join("")}</div>`;
+    return;
+  }
+  const groups = new Map();
+  for (const d of sorted) {
+    const { key, label } = groupKeyFor(d);
+    if (!groups.has(key)) groups.set(key, { label, decks: [] });
+    groups.get(key).decks.push(d);
+  }
+  deckResultsEl.innerHTML = [...groups.values()].map((g) => `
+    <div class="deckgroup">
+      <div class="deckgroup-title">${g.label} <span class="muted">(${g.decks.length} deck${g.decks.length > 1 ? "s" : ""})</span></div>
+      <div class="decklist">${g.decks.map(deckRowHtml).join("")}</div>
+    </div>
+  `).join("");
+}
+deckSortSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
+deckGroupSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
+
 async function searchDecksByCard() {
   const q = deckCardQ.value.trim();
   if (!q) return;
@@ -352,19 +490,13 @@ async function searchDecksByCard() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const decks = data.decks || [];
+    lastDeckResults = decks;
     if (!decks.length) {
       deckSearchStatus.textContent = "Aucun deck trouvé (importe d'abord la base, ou vérifie l'orthographe de la carte).";
       return;
     }
     deckSearchStatus.textContent = `${decks.length} deck(s) trouvé(s).`;
-    deckResultsEl.innerHTML = `<div class="decklist">${decks.map((d) => `
-      <div class="deckrow">
-        <a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a>
-        <span class="muted">par ${d.authorName}</span>
-        <span class="muted">— ${d.leader}${d.base ? " / " + d.base : ""}</span>
-        <span class="badge">${d.matchedCount}x ${d.matchedCard}</span>
-      </div>
-    `).join("")}</div>`;
+    renderDeckResults(decks);
   } catch (err) {
     deckSearchStatus.className = "status err";
     deckSearchStatus.textContent = `Erreur : ${err.message}`;
