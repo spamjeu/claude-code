@@ -58,6 +58,11 @@
   .meta-links{display:flex;flex-wrap:wrap;gap:10px}
   .meta-links a{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);text-decoration:none;font-size:.85rem}
   .meta-links a:hover{border-color:var(--accent2)}
+  .decklist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .deckrow{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.85rem}
+  .deckrow a{color:var(--accent2);text-decoration:none;font-weight:600}
+  .deckrow a:hover{text-decoration:underline}
+  .deckrow .muted{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -121,15 +126,26 @@
   <section class="grid" id="results"></section>
 
   <section class="panel" style="margin-top:20px">
-    <strong>Aller plus loin — croiser avec les decks</strong>
+    <strong>🗂️ Base de decks locale (Premier)</strong>
     <p class="sub" style="margin-top:6px">
-      Cet outil cherche des <em>cartes</em> par texte. Pour voir dans quels decks une carte trouvée ci-dessus est jouée,
-      ouvre sa page SWUDB (lien "Carte" sur chaque résultat — les pages carte listent en général les decks qui l'utilisent),
-      ou croise manuellement avec :
+      Indexe localement des decks publiés sur SWUDB (format Premier) pour retrouver ceux qui jouent une carte donnée.
+      L'import tourne depuis <code>server.js</code> et le résultat est stocké dans <code>data/decks.json</code> sur ta
+      machine — rien n'est envoyé à un tiers.
     </p>
-    <div class="meta-links">
-      <a href="https://swudb.com/decks/hot" target="_blank" rel="noopener">🔥 SWUDB — Decks du moment</a>
-      <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">📊 SWU Meta Stats — Meta Premier (ASH)</a>
+    <div class="row">
+      <button id="deckSync">Importer / mettre à jour (100 derniers decks Premier)</button>
+      <span class="status" id="deckSyncStatus"></span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input id="deckCardQ" type="text" placeholder="Nom de carte, ex: Sabine Wren" />
+      <button class="primary" id="deckSearch">Chercher les decks</button>
+    </div>
+    <div class="status" id="deckSearchStatus"></div>
+    <div id="deckResults"></div>
+    <div class="hint">
+      Source des données : API interne (non documentée) de <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>.
+      Voir aussi <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">SWU Meta Stats</a>
+      pour les stats de méta globales.
     </div>
   </section>
 </main>
@@ -150,14 +166,17 @@ function buildQuery(){
   if (raw.startsWith("raw:")) return raw.slice(4).trim();
 
   const parts = [];
-  if (raw) parts.push(`"${raw.replace(/"/g,'')}"`);
+  if (raw) {
+    const term = raw.replace(/"/g,'');
+    parts.push(`(t:"${term}" OR "${term}")`);
+  }
   const set = $("#set").value;
   if (set) parts.push(`set:${set}`);
   const type = $("#type").value;
   if (type) parts.push(`ty:${type}`);
   const aspect = $("#aspect").value;
   if (aspect) parts.push(`a:${aspect}`);
-  if (!parts.length) parts.push('"advantage"');
+  if (!parts.length) parts.push('t:"advantage"');
   return parts.join(" AND ");
 }
 
@@ -296,6 +315,63 @@ function render(cards, term){
     resultsEl.appendChild(el);
   }
 }
+
+// --- Base de decks locale ---
+const deckSyncBtn = $("#deckSync");
+const deckSyncStatus = $("#deckSyncStatus");
+const deckCardQ = $("#deckCardQ");
+const deckSearchBtn = $("#deckSearch");
+const deckSearchStatus = $("#deckSearchStatus");
+const deckResultsEl = $("#deckResults");
+
+deckSyncBtn.addEventListener("click", async () => {
+  deckSyncBtn.disabled = true;
+  deckSyncStatus.className = "status";
+  deckSyncStatus.textContent = "Import en cours… (ça peut prendre 1-2 minutes)";
+  try {
+    const res = await fetch("/api/decks/sync?format=Premier&limit=100", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    deckSyncStatus.textContent = `${data.imported} deck(s) importé(s) cette fois — ${data.total} au total dans la base locale.`;
+  } catch (err) {
+    deckSyncStatus.className = "status err";
+    deckSyncStatus.textContent = `Erreur d'import : ${err.message}`;
+  } finally {
+    deckSyncBtn.disabled = false;
+  }
+});
+
+async function searchDecksByCard() {
+  const q = deckCardQ.value.trim();
+  if (!q) return;
+  deckSearchStatus.className = "status";
+  deckSearchStatus.textContent = "Recherche…";
+  deckResultsEl.innerHTML = "";
+  try {
+    const res = await fetch(`/api/decks/by-card?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    const decks = data.decks || [];
+    if (!decks.length) {
+      deckSearchStatus.textContent = "Aucun deck trouvé (importe d'abord la base, ou vérifie l'orthographe de la carte).";
+      return;
+    }
+    deckSearchStatus.textContent = `${decks.length} deck(s) trouvé(s).`;
+    deckResultsEl.innerHTML = `<div class="decklist">${decks.map((d) => `
+      <div class="deckrow">
+        <a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a>
+        <span class="muted">par ${d.authorName}</span>
+        <span class="muted">— ${d.leader}${d.base ? " / " + d.base : ""}</span>
+        <span class="badge">${d.matchedCount}x ${d.matchedCard}</span>
+      </div>
+    `).join("")}</div>`;
+  } catch (err) {
+    deckSearchStatus.className = "status err";
+    deckSearchStatus.textContent = `Erreur : ${err.message}`;
+  }
+}
+deckSearchBtn.addEventListener("click", searchDecksByCard);
+deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });
 
 // Recherche par défaut au chargement : cartes "advantage" du set ASH
 PRESETS["advantage-ash"]();

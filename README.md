@@ -34,24 +34,44 @@ texte mentionne "advantage". Tu peux ensuite :
 Chaque résultat pointe vers sa page carte sur [swudb.com](https://swudb.com), et un
 lien "JSON brut" est disponible pour déboguer si un champ ne s'affiche pas correctement.
 
+## Base de decks locale (quels decks jouent une carte ?)
+
+En bas de page, un panneau permet d'indexer localement des decks publiés sur
+[swudb.com](https://swudb.com) (format Premier) pour ensuite chercher "quels decks
+jouent la carte X" :
+
+- **Importer / mettre à jour** appelle `POST /api/decks/sync` côté serveur, qui parcourt
+  les decks Premier les plus récents de SWUDB, récupère le détail de chacun (liste de
+  cartes incluse), et sauvegarde tout dans `data/decks.json` (créé automatiquement,
+  ignoré par git). Rappelle le bouton plus tard pour agrandir/rafraîchir la base — les
+  decks déjà connus sont mis à jour, pas dupliqués. Par défaut : les 100 decks Premier
+  les plus récents (`limit`, plafonné à 500 côté serveur).
+- **Chercher les decks** appelle `GET /api/decks/by-card?q=...` qui filtre
+  `data/decks.json` localement (aucun appel réseau à ce moment-là) et liste les decks
+  dont au moins une carte matche le nom tapé, avec un lien vers la page du deck sur
+  SWUDB.
+
 ## Données
 
-Les cartes viennent de l'API publique et non-officielle
-[api.swu-db.com](https://www.swu-db.com/api) (endpoint `/cards/search`), relayée par le
-petit proxy local `server.js` (voir ci-dessus) — rien ne transite par un serveur tiers,
-seul ton poste appelle l'API.
+- Les cartes viennent de l'API publique et non-officielle
+  [api.swu-db.com](https://www.swu-db.com/api) (endpoint `/cards/search`), relayée par
+  le petit proxy local `server.js` — rien ne transite par un serveur tiers, seul ton
+  poste appelle l'API.
+- Les decks viennent de l'API **interne et non documentée** de swudb.com
+  (`/api/decks/search` et `/api/deck/{id}`), découverte en inspectant son bundle JS
+  public. Elle ne nécessite pas d'authentification pour lire des decks publiés, mais
+  n'est pas garantie stable dans le temps (peut changer sans préavis). L'import est
+  volontairement limité (max 500 decks par appel, ~200ms de délai entre requêtes) pour
+  rester raisonnable envers leur serveur.
 
-Pour croiser les cartes trouvées avec des listes de decks jouées en tournoi :
+Pour des stats de méta plus larges (sans devoir importer toi-même) :
 
-- [SWUDB — Decks du moment](https://swudb.com/decks/hot)
 - [SWU Meta Stats — Meta Premier (Ashes of the Empire)](https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire)
 
 ## Limites connues
 
-- L'outil cherche des **cartes**, pas directement des **decks** — la construction de
-  decks (swudb.com) n'expose pas d'API publique documentée pour filtrer des decks par
-  carte jouée ; ouvre la page carte correspondante sur SWUDB (souvent listée avec les
-  decks qui l'utilisent) ou les liens meta ci-dessus pour aller plus loin.
+- La base de decks est **locale et manuelle** : elle ne contient que ce que tu as
+  importé via le bouton, pas l'intégralité des decks publiés sur SWUDB.
 - Le mapping des champs JSON (`Name`, `Text`, image, etc.) est fait de façon tolérante
-  (recherche de clés approchantes) car le schéma exact de l'API n'est pas garanti stable ;
-  si un champ manque, regarde le "JSON brut" du résultat concerné.
+  (recherche de clés approchantes) car le schéma exact de l'API cartes n'est pas
+  garanti stable ; si un champ manque, regarde le "JSON brut" du résultat concerné.
