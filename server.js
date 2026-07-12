@@ -186,12 +186,12 @@ function toResult(deck, matches) {
   };
 }
 
-// Comma-separate multiple card names to require all of them (AND) in the
-// same deck. An empty query lists every deck (e.g. to sort by favorites
-// without filtering by card).
+// Separate multiple card names with a comma or a "+" to require all of them
+// (AND) in the same deck. An empty query lists every deck (e.g. to sort by
+// favorites without filtering by card).
 function findDecksByCard(query) {
   const decks = loadDecks();
-  const needles = query.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const needles = query.split(/[,+]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
   const results = [];
   for (const deck of Object.values(decks)) {
     if (!needles.length) {
