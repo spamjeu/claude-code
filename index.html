@@ -136,11 +136,11 @@
 
 <footer>
   Outil non officiel, données via l'API publique <a href="https://www.swu-db.com" target="_blank" rel="noopener">swu-db.com</a>.
-  Requêtes faites directement depuis ton navigateur (aucune donnée envoyée ailleurs).
+  Requêtes relayées par le petit proxy local <code>server.js</code> (aucune donnée envoyée à un tiers).
 </footer>
 
 <script>
-const API = "https://api.swu-db.com/cards/search";
+const API = "/api/cards/search";
 const $ = (sel) => document.querySelector(sel);
 const resultsEl = $("#results");
 const statusEl = $("#status");
@@ -247,8 +247,9 @@ async function search(){
   }catch(err){
     statusEl.className = "status err";
     statusEl.textContent = `Erreur de requête vers l'API (${err.message}). ` +
-      `Si ça persiste, c'est probablement un blocage CORS/réseau côté navigateur — ` +
-      `essaie de servir ce fichier via un petit serveur local (ex: "npx serve .") plutôt que de l'ouvrir en file://.`;
+      `Cette page doit être servie par "node server.js" (voir README) : l'API api.swu-db.com ` +
+      `ne renvoie pas d'en-tête CORS sur ses réponses, donc un fetch() direct depuis le navigateur ` +
+      `est bloqué quelle que soit la façon dont ce fichier est ouvert.`;
   }
 }
 

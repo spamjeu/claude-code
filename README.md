@@ -11,11 +11,15 @@ cf. par exemple [ASH/208](https://swudb.com/card/ASH/208) et
 
 ## Utilisation
 
-Ouvre simplement `index.html` dans un navigateur (double-clic), ou sers-le en local :
+L'API publique `api.swu-db.com` ne renvoie pas d'en-tête CORS sur ses réponses `GET`
+(seul son preflight `OPTIONS` en annonce un) : un `fetch()` direct depuis un navigateur
+est donc **toujours bloqué**, que ce soit ouvert en `file://` ou servi statiquement
+(ex. `npx serve .`). Ce dépôt inclut un petit proxy Node (`server.js`, aucune dépendance)
+qui relaie les requêtes côté serveur pour contourner ça :
 
 ```bash
-npx serve .
-# puis ouvre l'URL affichée
+node server.js
+# puis ouvre http://localhost:8787
 ```
 
 La recherche par défaut au chargement montre toutes les cartes du set ASH dont le
@@ -33,8 +37,9 @@ lien "JSON brut" est disponible pour déboguer si un champ ne s'affiche pas corr
 ## Données
 
 Les cartes viennent de l'API publique et non-officielle
-[api.swu-db.com](https://www.swu-db.com/api) (endpoint `/cards/search`), interrogée
-directement depuis le navigateur — rien ne transite par un serveur tiers.
+[api.swu-db.com](https://www.swu-db.com/api) (endpoint `/cards/search`), relayée par le
+petit proxy local `server.js` (voir ci-dessus) — rien ne transite par un serveur tiers,
+seul ton poste appelle l'API.
 
 Pour croiser les cartes trouvées avec des listes de decks jouées en tournoi :
 
