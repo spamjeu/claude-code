@@ -44,11 +44,11 @@ En bas de page, un panneau permet d'indexer localement des decks publiés sur
 jouent la carte X" :
 
 - **Importer / mettre à jour** appelle `POST /api/decks/sync` côté serveur, qui parcourt
-  les decks Premier les plus récents de SWUDB, récupère le détail de chacun (liste de
-  cartes incluse), et sauvegarde tout dans `data/decks.json` (créé automatiquement,
-  ignoré par git). Rappelle le bouton plus tard pour agrandir/rafraîchir la base — les
-  decks déjà connus sont mis à jour, pas dupliqués. Par défaut : les 100 decks Premier
-  les plus récents (`limit`, plafonné à 500 côté serveur).
+  les decks Premier les plus "hot" (populaires) de SWUDB, récupère le détail de chacun
+  (liste de cartes incluse), et sauvegarde tout dans `data/decks.json` (créé
+  automatiquement, ignoré par git). Rappelle le bouton plus tard pour agrandir/rafraîchir
+  la base — les decks déjà connus sont mis à jour, pas dupliqués. Par défaut : les 200
+  decks Premier les plus "hot" (`limit`, plafonné à 500 côté serveur).
 - **Chercher les decks** appelle `GET /api/decks/by-card?q=...` qui filtre
   `data/decks.json` localement (aucun appel réseau à ce moment-là) et liste les decks
   dont au moins une carte matche le nom tapé, avec un lien vers la page du deck sur

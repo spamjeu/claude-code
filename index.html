@@ -162,7 +162,7 @@
       machine — rien n'est envoyé à un tiers.
     </p>
     <div class="row">
-      <button id="deckSync">Importer / mettre à jour (100 derniers decks Premier)</button>
+      <button id="deckSync">Importer / mettre à jour (200 decks Premier "hot")</button>
       <button class="danger" id="deckClear">🗑️ Vider la base locale</button>
       <span class="status" id="deckSyncStatus"></span>
     </div>
@@ -391,7 +391,7 @@ deckSyncBtn.addEventListener("click", async () => {
   deckSyncStatus.className = "status";
   deckSyncStatus.textContent = "Import en cours… (ça peut prendre 1-2 minutes)";
   try {
-    const res = await fetch("/api/decks/sync?format=Premier&limit=100", { method: "POST" });
+    const res = await fetch("/api/decks/sync?format=Premier&limit=200", { method: "POST" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     deckSyncStatus.textContent = `${data.imported} deck(s) importé(s) cette fois — ${data.total} au total dans la base locale.`;
