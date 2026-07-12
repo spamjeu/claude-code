@@ -95,7 +95,7 @@ async function syncDecks({ format, limit }) {
     let imported = 0;
     while (imported < limit) {
       const searchUrl = `https://swudb.com/api/decks/search?` +
-        `skip=${skip}&sortby=new` + (format ? `&format=${encodeURIComponent(format)}` : "");
+        `skip=${skip}&sortby=hot` + (format ? `&format=${encodeURIComponent(format)}` : "");
       const page = await httpsGetJson(searchUrl);
       const summaries = page.decks || [];
       if (!summaries.length) break;
