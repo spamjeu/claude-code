@@ -180,7 +180,10 @@ function toResult(deck, matches) {
     publishDate: deck.publishDate,
     leaderName: leaderRef && leaderRef.name,
     leaderSet: leaderRef && leaderRef.set,
+    leaderNumber: leaderRef && leaderRef.number,
     baseName: baseRef && baseRef.name,
+    baseSet: baseRef && baseRef.set,
+    baseNumber: baseRef && baseRef.number,
     colors: deck.colors || [],
     matches,
   };

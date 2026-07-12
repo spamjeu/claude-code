@@ -82,6 +82,11 @@
   .aspect-Cunning{background:#d4a017}
   .aspect-Heroism{background:#d8dce2}
   .aspect-Villainy{background:#1a1a1a}
+  [data-preview-set]{cursor:help; border-bottom:1px dotted var(--muted)}
+  #cardPreview{position:fixed;display:none;z-index:1000;width:220px;aspect-ratio:5/7;
+    border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5);
+    border:1px solid var(--border);background:var(--panel2);pointer-events:none}
+  #cardPreview img{width:100%;height:100%;object-fit:cover;display:block}
 </style>
 </head>
 <body>
@@ -191,6 +196,8 @@
   Outil non officiel, données via l'API publique <a href="https://www.swu-db.com" target="_blank" rel="noopener">swu-db.com</a>.
   Requêtes relayées par le petit proxy local <code>server.js</code> (aucune donnée envoyée à un tiers).
 </footer>
+
+<div id="cardPreview"><img alt="" /></div>
 
 <script>
 const API = "/api/cards/search";
@@ -431,16 +438,22 @@ function colorDots(colors){
   return colors.map((c) => `<span class="aspect-dot aspect-${c}" title="${c}"></span>`).join("");
 }
 
+function previewAttrs(set, number){
+  return set && number ? `data-preview-set="${set}" data-preview-number="${number}"` : "";
+}
+
 function deckRowHtml(d){
   return `
     <div class="deckrow">
       ${colorDots(d.colors)}
       <a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a>
       <span class="muted">par ${d.authorName}</span>
-      <span class="muted">— ${d.leaderName || "?"}${d.baseName ? " / " + d.baseName : ""}</span>
+      <span class="muted">—
+        <span ${previewAttrs(d.leaderSet, d.leaderNumber)}>${d.leaderName || "?"}</span>${d.baseName ? ` / <span ${previewAttrs(d.baseSet, d.baseNumber)}>${d.baseName}</span>` : ""}
+      </span>
       <span class="badge">❤️ ${d.likeCount || 0}</span>
       <div style="display:flex;flex-wrap:wrap;gap:5px;flex-basis:100%">
-        ${d.matches.map((m) => `<span class="badge">${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
+        ${d.matches.map((m) => `<span class="badge" ${previewAttrs(m.set, m.number)}>${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
       </div>
     </div>
   `;
@@ -506,6 +519,37 @@ async function searchDecksByCard() {
 }
 deckSearchBtn.addEventListener("click", searchDecksByCard);
 deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });
+
+// --- Aperçu de carte au survol ---
+const cardPreviewEl = $("#cardPreview");
+const cardPreviewImg = cardPreviewEl.querySelector("img");
+
+function positionCardPreview(e){
+  const margin = 16;
+  const rect = cardPreviewEl.getBoundingClientRect();
+  let x = e.clientX + margin;
+  let y = e.clientY + margin;
+  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - margin;
+  if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - margin;
+  cardPreviewEl.style.left = `${Math.max(4, x)}px`;
+  cardPreviewEl.style.top = `${Math.max(4, y)}px`;
+}
+
+deckResultsEl.addEventListener("mouseover", (e) => {
+  const el = e.target.closest("[data-preview-set]");
+  if (!el) return;
+  const set = el.dataset.previewSet.toUpperCase();
+  const number = el.dataset.previewNumber;
+  cardPreviewImg.src = `https://cdn.swu-db.com/images/cards/${set}/${number}.png`;
+  cardPreviewEl.style.display = "block";
+  positionCardPreview(e);
+});
+deckResultsEl.addEventListener("mousemove", (e) => {
+  if (cardPreviewEl.style.display === "block") positionCardPreview(e);
+});
+deckResultsEl.addEventListener("mouseout", (e) => {
+  if (e.target.closest("[data-preview-set]")) cardPreviewEl.style.display = "none";
+});
 
 </script>
 </body>
