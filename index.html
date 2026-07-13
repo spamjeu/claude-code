@@ -106,6 +106,11 @@
   .deckrow a{color:var(--accent2);text-decoration:none;font-weight:600}
   .deckrow a:hover{text-decoration:underline}
   .deckrow .muted{color:var(--muted)}
+  .meta-badge{color:var(--accent);border-color:var(--accent)}
+  .manacurve{display:flex;align-items:flex-end;gap:3px;height:40px;padding:0 2px}
+  .manacurve-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;width:10px}
+  .manacurve-bar{width:100%;background:var(--accent2);border-radius:2px 2px 0 0}
+  .manacurve-label{font-size:.6rem;color:var(--muted);margin-top:2px}
   .tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}
   .tab{background:transparent;border:1px solid transparent;border-bottom:2px solid transparent;border-radius:4px 4px 0 0;
     padding:10px 16px;font-size:.85rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
@@ -257,10 +262,11 @@
     <div id="deckResults"></div>
     <div class="hint">
       L'import ne fait que fusionner/mettre à jour — utilise "Vider la base locale" si tu veux repartir de zéro
-      (par ex. après un changement de format de données). Source : API interne (non documentée) de
-      <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>.
-      Voir aussi <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">SWU Meta Stats</a>
-      pour les stats de méta globales.
+      (par ex. après un changement de format de données, la courbe de mana n'apparaît qu'après un premier import
+      avec la nouvelle version). Source des decks : API interne (non documentée) de
+      <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>. Le badge 📊 "% méta / winrate" quand
+      présent vient de l'API publique de <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">SWU Meta Stats</a>
+      (format Premier, croisé par leader + base — n'apparaît que pour les archétypes qu'ils suivent déjà).
     </div>
   </section>
   </section>
@@ -489,6 +495,27 @@ const deckGroupSel = $("#deckGroup");
 const deckDbStatusEl = $("#deckDbStatus");
 let lastDeckResults = [];
 
+// Presence méta (Premier) via l'API publique de swumetastats.com, chargée une
+// fois et indexée par "Leader | Titre" + nom de base pour un lookup O(1) au
+// rendu de chaque deck. Silencieux si pas de correspondance (ex: leaders/bases
+// pas encore couverts par le tracker méta, ou base générique).
+let metaArchetypeIndex = new Map();
+async function loadMetaArchetypes(){
+  try {
+    const res = await fetch("/api/meta/archetypes");
+    const data = await res.json();
+    for (const a of data.archetypes || []) {
+      metaArchetypeIndex.set(`${a.leaderName}||${a.baseName}`, a);
+    }
+  } catch { /* pas grave, on affichera juste sans stats méta */ }
+}
+loadMetaArchetypes();
+function metaFor(d){
+  if (!d.leaderName) return null;
+  const key = `${d.leaderName}${d.leaderTitle ? " | " + d.leaderTitle : ""}||${d.baseName || ""}`;
+  return metaArchetypeIndex.get(key) || null;
+}
+
 async function refreshDeckDbStatus(){
   try {
     const res = await fetch("/api/decks/status");
@@ -563,6 +590,25 @@ function previewAttrs(set, number){
   return set && number ? `data-preview-set="${set}" data-preview-number="${number}"` : "";
 }
 
+function manaCurveHtml(curve){
+  if (!curve || !curve.some((n) => n > 0)) return "";
+  const max = Math.max(...curve);
+  const bars = curve.map((n, cost) => `
+    <div class="manacurve-col" title="${n} carte(s) à coût ${cost === 6 ? "6+" : cost}">
+      <div class="manacurve-bar" style="height:${max ? Math.max(3, Math.round((n / max) * 28)) : 3}px"></div>
+      <div class="manacurve-label">${cost === 6 ? "6+" : cost}</div>
+    </div>`).join("");
+  return `<div class="manacurve" title="Courbe de mana">${bars}</div>`;
+}
+
+function metaBadgeHtml(d){
+  const meta = metaFor(d);
+  if (!meta) return "";
+  const share = meta.metaShare.toFixed(1);
+  const winRate = (meta.winRate * 100).toFixed(1);
+  return `<span class="badge meta-badge" title="Données swumetastats.com, format Premier">📊 ${share}% méta · ${winRate}% winrate</span>`;
+}
+
 function deckRowHtml(d){
   return `
     <div class="deckrow">
@@ -573,6 +619,8 @@ function deckRowHtml(d){
         <span ${previewAttrs(d.leaderSet, d.leaderNumber)}>${d.leaderName || "?"}</span>${d.baseName ? ` / <span ${previewAttrs(d.baseSet, d.baseNumber)}>${d.baseName}</span>` : ""}
       </span>
       <span class="badge">❤️ ${d.likeCount || 0}</span>
+      ${metaBadgeHtml(d)}
+      ${manaCurveHtml(d.manaCurve)}
       <div style="display:flex;flex-wrap:wrap;gap:5px;flex-basis:100%">
         ${d.matches.map((m) => `<span class="badge" ${previewAttrs(m.set, m.number)}>${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
       </div>

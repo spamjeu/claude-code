@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 8787;
 const ROOT = __dirname;
 const DECKS_FILE = path.join(ROOT, "data", "decks.json");
 const SYNC_DELAY_MS = 200;
+const META_CACHE_MS = 60 * 60 * 1000;
 
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
@@ -62,28 +63,70 @@ function cardRef(card) {
 }
 
 // swudb.com's own API only exposes aspects as undocumented numeric codes, so
-// colors are resolved from the official api.swu-db.com card data instead
-// (one fetch per set, cached for the process lifetime, keyed by card number).
-const setAspectsCache = new Map();
+// card info (aspects, cost, type) is resolved from the official api.swu-db.com
+// data instead (one fetch per set, cached for the process lifetime, keyed by
+// card number).
+const setCardInfoCache = new Map();
 
-async function getSetAspects(set) {
+async function getSetCardInfo(set) {
   const key = set.toLowerCase();
-  if (setAspectsCache.has(key)) return setAspectsCache.get(key);
+  if (setCardInfoCache.has(key)) return setCardInfoCache.get(key);
   const map = new Map();
   try {
     const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
-    for (const c of data.data || []) map.set(c.Number, c.Aspects || []);
+    for (const c of data.data || []) {
+      map.set(c.Number, { aspects: c.Aspects || [], cost: c.Cost, type: c.Type || "" });
+    }
   } catch (err) {
-    console.error(`Could not load aspects for set ${set}: ${err.message}`);
+    console.error(`Could not load card info for set ${set}: ${err.message}`);
   }
-  setAspectsCache.set(key, map);
+  setCardInfoCache.set(key, map);
   return map;
 }
 
 async function resolveAspects(ref) {
   if (!ref || !ref.set || !ref.number) return [];
-  const map = await getSetAspects(ref.set);
-  return map.get(ref.number) || [];
+  const map = await getSetCardInfo(ref.set);
+  return (map.get(ref.number) || {}).aspects || [];
+}
+
+async function resolveCardInfo(ref) {
+  if (!ref || !ref.set || !ref.number) return null;
+  const map = await getSetCardInfo(ref.set);
+  return map.get(ref.number) || null;
+}
+
+// Buckets a deck's non-leader/base cards by cost into a 0..6 histogram
+// (6 = "6 or more"), weighted by copy count, for a mana-curve display.
+async function computeManaCurve(cards) {
+  const curve = [0, 0, 0, 0, 0, 0, 0];
+  for (const card of cards) {
+    const info = await resolveCardInfo(card);
+    if (!info || info.type === "Leader" || info.type === "Base") continue;
+    const cost = parseInt(info.cost, 10);
+    if (Number.isNaN(cost)) continue;
+    const bucket = Math.min(cost, 6);
+    curve[bucket] += card.count || 1;
+  }
+  return curve;
+}
+
+// Meta presence (leader/base archetype share, win rate) from the community
+// site swumetastats.com's public API — cached for an hour since it's a
+// side-panel stat, not something that needs to be live per search.
+let metaArchetypesCache = { data: null, fetchedAt: 0 };
+
+async function getMetaArchetypes() {
+  const age = Date.now() - metaArchetypesCache.fetchedAt;
+  if (metaArchetypesCache.data && age < META_CACHE_MS) return metaArchetypesCache.data;
+  try {
+    const data = await httpsGetJson("https://swumetastats.com/api/archetypes?format=Premier");
+    metaArchetypesCache = { data: data.archetypes || [], fetchedAt: Date.now() };
+  } catch (err) {
+    console.error(`Could not load meta archetypes: ${err.message}`);
+    if (!metaArchetypesCache.data) metaArchetypesCache = { data: [], fetchedAt: Date.now() };
+  }
+  return metaArchetypesCache.data;
 }
 
 async function syncDecks({ format, limit }) {
@@ -111,6 +154,10 @@ async function syncDecks({ format, limit }) {
           const [leaderAspects, secondLeaderAspects, baseAspects] = await Promise.all([
             resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef),
           ]);
+          const cards = (deck.shuffledDeck || []).map((entry) => ({
+            ...cardRef(entry.card),
+            count: entry.count,
+          }));
           decks[summary.deckId] = {
             deckId: summary.deckId,
             deckName: deck.deckName,
@@ -122,10 +169,8 @@ async function syncDecks({ format, limit }) {
             colors: [...new Set([...leaderAspects, ...secondLeaderAspects, ...baseAspects])],
             likeCount: deck.likeCount,
             publishDate: deck.publishDate,
-            cards: (deck.shuffledDeck || []).map((entry) => ({
-              ...cardRef(entry.card),
-              count: entry.count,
-            })),
+            cards,
+            manaCurve: await computeManaCurve(cards),
           };
           imported++;
         } catch (err) {
@@ -179,12 +224,14 @@ function toResult(deck, matches) {
     likeCount: deck.likeCount,
     publishDate: deck.publishDate,
     leaderName: leaderRef && leaderRef.name,
+    leaderTitle: leaderRef && leaderRef.title,
     leaderSet: leaderRef && leaderRef.set,
     leaderNumber: leaderRef && leaderRef.number,
     baseName: baseRef && baseRef.name,
     baseSet: baseRef && baseRef.set,
     baseNumber: baseRef && baseRef.number,
     colors: deck.colors || [],
+    manaCurve: deck.manaCurve || null,
     matches,
   };
 }
@@ -262,6 +309,19 @@ function handleRequest(req, res) {
     } catch { /* no decks.json yet */ }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ count, lastSyncedAt }));
+    return;
+  }
+
+  if (url.pathname === "/api/meta/archetypes") {
+    getMetaArchetypes()
+      .then((archetypes) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ archetypes }));
+      })
+      .catch((err) => {
+        res.writeHead(502, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      });
     return;
   }
 
