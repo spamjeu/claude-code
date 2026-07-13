@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: swu-card-finder
+    runtime: node
+    plan: free
+    branch: claude/swu-card-upgrade-search-rfxb2h   # ou main si tu merges d'abord
+    buildCommand: "echo 'no deps'"
+    startCommand: "node server.js"
+    envVars:
+      - key: NODE_VERSION
+        value: 20
