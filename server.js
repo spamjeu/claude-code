@@ -22,6 +22,17 @@ const ROOT = __dirname;
 const DECKS_FILE = path.join(ROOT, "data", "decks.json");
 const SYNC_DELAY_MS = 200;
 const META_CACHE_MS = 60 * 60 * 1000;
+const SYNC_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+// Milliseconds until another sync is allowed, or 0 if one can start now.
+function syncCooldownRemaining() {
+  try {
+    const age = Date.now() - fs.statSync(DECKS_FILE).mtime.getTime();
+    return Math.max(0, SYNC_COOLDOWN_MS - age);
+  } catch {
+    return 0; // no decks.json yet
+  }
+}
 
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
@@ -299,6 +310,13 @@ function handleRequest(req, res) {
   }
 
   if (url.pathname === "/api/decks/sync" && req.method === "POST") {
+    const cooldown = syncCooldownRemaining();
+    if (cooldown > 0) {
+      const minutes = Math.ceil(cooldown / 60000);
+      res.writeHead(429, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: `Prochaine synchro possible dans ${minutes} min.`, cooldownMs: cooldown }));
+      return;
+    }
     const format = url.searchParams.get("format") || "Premier";
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10), 500);
     syncDecks({ format, limit })
@@ -327,7 +345,7 @@ function handleRequest(req, res) {
       lastSyncedAt = fs.statSync(DECKS_FILE).mtime.toISOString();
     } catch { /* no decks.json yet */ }
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ count, lastSyncedAt }));
+    res.end(JSON.stringify({ count, lastSyncedAt, cooldownMs: syncCooldownRemaining() }));
     return;
   }
 

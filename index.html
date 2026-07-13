@@ -241,7 +241,6 @@
     <div class="status" id="deckDbStatus"></div>
     <div class="row">
       <button id="deckSync">Importer / mettre à jour (200 decks Premier "hot")</button>
-      <button class="danger" id="deckClear">🗑️ Vider la base locale</button>
       <span class="status" id="deckSyncStatus"></span>
     </div>
     <div class="row" style="margin-top:10px">
@@ -269,9 +268,8 @@
     <div class="status" id="deckSearchStatus"></div>
     <div id="deckResults"></div>
     <div class="hint">
-      L'import ne fait que fusionner/mettre à jour — utilise "Vider la base locale" si tu veux repartir de zéro
-      (par ex. après un changement de format de données, la courbe de mana n'apparaît qu'après un premier import
-      avec la nouvelle version). Source des decks : API interne (non documentée) de
+      L'import ne fait que fusionner/mettre à jour la base locale (une synchro toutes les 2h maximum).
+      Source des decks : API interne (non documentée) de
       <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>. Le badge 📊 "% méta / winrate" quand
       présent vient de l'API publique de <a href="https://www.swumetastats.com/meta/overview?format=Premier&meta=ashes-of-the-empire" target="_blank" rel="noopener">SWU Meta Stats</a>
       (format Premier, croisé par leader + base — n'apparaît que pour les archétypes qu'ils suivent déjà).
@@ -492,7 +490,6 @@ document.querySelectorAll(".tab").forEach((btn) => {
 
 // --- Base de decks locale ---
 const deckSyncBtn = $("#deckSync");
-const deckClearBtn = $("#deckClear");
 const deckSyncStatus = $("#deckSyncStatus");
 const deckCardQ = $("#deckCardQ");
 const deckSearchBtn = $("#deckSearch");
@@ -524,6 +521,13 @@ function metaFor(d){
   return metaArchetypeIndex.get(key) || null;
 }
 
+function formatCooldown(ms){
+  const totalMin = Math.ceil(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
+}
+
 async function refreshDeckDbStatus(){
   try {
     const res = await fetch("/api/decks/status");
@@ -533,6 +537,13 @@ async function refreshDeckDbStatus(){
     } else {
       const date = new Date(data.lastSyncedAt);
       deckDbStatusEl.textContent = `${data.count} deck(s) en base — dernière synchro : ${date.toLocaleString("fr-FR")}`;
+    }
+    if (data.cooldownMs > 0) {
+      deckSyncBtn.disabled = true;
+      deckSyncBtn.title = `Prochaine synchro possible dans ${formatCooldown(data.cooldownMs)} (limite : une synchro toutes les 2h)`;
+    } else {
+      deckSyncBtn.disabled = false;
+      deckSyncBtn.title = "";
     }
   } catch {
     deckDbStatusEl.textContent = "";
@@ -556,34 +567,12 @@ deckSyncBtn.addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     deckSyncStatus.textContent = `${data.imported} deck(s) importé(s) cette fois — ${data.total} au total dans la base locale.`;
-    refreshDeckDbStatus();
   } catch (err) {
     deckSyncStatus.className = "status err";
     deckSyncStatus.textContent = `Erreur d'import : ${err.message}`;
   } finally {
     clearInterval(progressTimer);
-    deckSyncBtn.disabled = false;
-  }
-});
-
-deckClearBtn.addEventListener("click", async () => {
-  if (!confirm("Vider toute la base de decks locale ? Cette action est irréversible.")) return;
-  deckClearBtn.disabled = true;
-  deckSyncStatus.className = "status";
-  deckSyncStatus.textContent = "Suppression…";
-  try {
-    const res = await fetch("/api/decks", { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    deckSyncStatus.textContent = "Base de decks locale vidée.";
-    deckResultsEl.innerHTML = "";
-    deckSearchStatus.textContent = "";
     refreshDeckDbStatus();
-  } catch (err) {
-    deckSyncStatus.className = "status err";
-    deckSyncStatus.textContent = `Erreur : ${err.message}`;
-  } finally {
-    deckClearBtn.disabled = false;
   }
 });
 
