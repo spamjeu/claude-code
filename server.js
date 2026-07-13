@@ -248,6 +248,18 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/decks/status") {
+    let count = 0;
+    let lastSyncedAt = null;
+    try {
+      count = Object.keys(loadDecks()).length;
+      lastSyncedAt = fs.statSync(DECKS_FILE).mtime.toISOString();
+    } catch { /* no decks.json yet */ }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ count, lastSyncedAt }));
+    return;
+  }
+
   if (url.pathname === "/api/decks/by-card") {
     const q = url.searchParams.get("q") || "";
     res.writeHead(200, { "content-type": "application/json" });

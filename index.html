@@ -166,6 +166,7 @@
       L'import tourne depuis <code>server.js</code> et le résultat est stocké dans <code>data/decks.json</code> sur ta
       machine — rien n'est envoyé à un tiers.
     </p>
+    <div class="status" id="deckDbStatus"></div>
     <div class="row">
       <button id="deckSync">Importer / mettre à jour (200 decks Premier "hot")</button>
       <button class="danger" id="deckClear">🗑️ Vider la base locale</button>
@@ -389,7 +390,24 @@ const deckSearchStatus = $("#deckSearchStatus");
 const deckResultsEl = $("#deckResults");
 const deckSortSel = $("#deckSort");
 const deckGroupSel = $("#deckGroup");
+const deckDbStatusEl = $("#deckDbStatus");
 let lastDeckResults = [];
+
+async function refreshDeckDbStatus(){
+  try {
+    const res = await fetch("/api/decks/status");
+    const data = await res.json();
+    if (!data.count) {
+      deckDbStatusEl.textContent = "Base locale vide — aucune synchro effectuée.";
+    } else {
+      const date = new Date(data.lastSyncedAt);
+      deckDbStatusEl.textContent = `${data.count} deck(s) en base — dernière synchro : ${date.toLocaleString("fr-FR")}`;
+    }
+  } catch {
+    deckDbStatusEl.textContent = "";
+  }
+}
+refreshDeckDbStatus();
 
 deckSyncBtn.addEventListener("click", async () => {
   deckSyncBtn.disabled = true;
@@ -400,6 +418,7 @@ deckSyncBtn.addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     deckSyncStatus.textContent = `${data.imported} deck(s) importé(s) cette fois — ${data.total} au total dans la base locale.`;
+    refreshDeckDbStatus();
   } catch (err) {
     deckSyncStatus.className = "status err";
     deckSyncStatus.textContent = `Erreur d'import : ${err.message}`;
@@ -420,6 +439,7 @@ deckClearBtn.addEventListener("click", async () => {
     deckSyncStatus.textContent = "Base de decks locale vidée.";
     deckResultsEl.innerHTML = "";
     deckSearchStatus.textContent = "";
+    refreshDeckDbStatus();
   } catch (err) {
     deckSyncStatus.className = "status err";
     deckSyncStatus.textContent = `Erreur : ${err.message}`;
