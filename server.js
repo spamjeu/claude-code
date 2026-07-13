@@ -65,23 +65,29 @@ function cardRef(card) {
 // swudb.com's own API only exposes aspects as undocumented numeric codes, so
 // card info (aspects, cost, type) is resolved from the official api.swu-db.com
 // data instead (one fetch per set, cached for the process lifetime, keyed by
-// card number).
+// card number). api.swu-db.com's per-set endpoint is very slow (6-14s observed)
+// so the cache stores the in-flight *promise*, not just the resolved value —
+// concurrent lookups for the same not-yet-cached set share one fetch instead
+// of each kicking off their own.
 const setCardInfoCache = new Map();
 
-async function getSetCardInfo(set) {
+function getSetCardInfo(set) {
   const key = set.toLowerCase();
   if (setCardInfoCache.has(key)) return setCardInfoCache.get(key);
-  const map = new Map();
-  try {
-    const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
-    for (const c of data.data || []) {
-      map.set(c.Number, { aspects: c.Aspects || [], cost: c.Cost, type: c.Type || "" });
+  const promise = (async () => {
+    const map = new Map();
+    try {
+      const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
+      for (const c of data.data || []) {
+        map.set(c.Number, { aspects: c.Aspects || [], cost: c.Cost, type: c.Type || "" });
+      }
+    } catch (err) {
+      console.error(`Could not load card info for set ${set}: ${err.message}`);
     }
-  } catch (err) {
-    console.error(`Could not load card info for set ${set}: ${err.message}`);
-  }
-  setCardInfoCache.set(key, map);
-  return map;
+    return map;
+  })();
+  setCardInfoCache.set(key, promise);
+  return promise;
 }
 
 async function resolveAspects(ref) {
@@ -98,7 +104,13 @@ async function resolveCardInfo(ref) {
 
 // Buckets a deck's non-leader/base cards by cost into a 0..6 histogram
 // (6 = "6 or more"), weighted by copy count, for a mana-curve display.
+// Prefetches every distinct set among the deck's cards in parallel first —
+// looking them up one card at a time would serialize api.swu-db.com's slow
+// per-set fetches instead of overlapping them.
 async function computeManaCurve(cards) {
+  const sets = [...new Set(cards.map((c) => c.set).filter(Boolean))];
+  await Promise.all(sets.map((s) => getSetCardInfo(s)));
+
   const curve = [0, 0, 0, 0, 0, 0, 0];
   for (const card of cards) {
     const info = await resolveCardInfo(card);
@@ -129,9 +141,45 @@ async function getMetaArchetypes() {
   return metaArchetypesCache.data;
 }
 
+const SYNC_BATCH_SIZE = 5;
+let syncProgress = { active: false, imported: 0, total: 0 };
+
+async function syncOneDeck(decks, summary) {
+  const deck = await httpsGetJson(`https://swudb.com/api/deck/${summary.deckId}`);
+  const leaderRef = cardRef(deck.leader);
+  const secondLeaderRef = cardRef(deck.secondLeader);
+  const baseRef = cardRef(deck.base);
+  const cards = (deck.shuffledDeck || []).map((entry) => ({
+    ...cardRef(entry.card),
+    count: entry.count,
+  }));
+  const [[leaderAspects, secondLeaderAspects, baseAspects], manaCurve] = await Promise.all([
+    Promise.all([resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef)]),
+    computeManaCurve(cards),
+  ]);
+  decks[summary.deckId] = {
+    deckId: summary.deckId,
+    deckName: deck.deckName,
+    authorName: deck.authorName,
+    deckFormat: deck.deckFormat,
+    leader: leaderRef,
+    secondLeader: secondLeaderRef,
+    base: baseRef,
+    colors: [...new Set([...leaderAspects, ...secondLeaderAspects, ...baseAspects])],
+    likeCount: deck.likeCount,
+    publishDate: deck.publishDate,
+    cards,
+    manaCurve,
+  };
+}
+
+// Decks within a page are fetched in small concurrent batches (instead of
+// strictly one at a time) to cut wall-clock time — still paced with a sleep
+// between batches so we don't hammer swudb.com's undocumented API.
 async function syncDecks({ format, limit }) {
   if (syncInProgress) throw new Error("Un import est déjà en cours.");
   syncInProgress = true;
+  syncProgress = { active: true, imported: 0, total: limit };
   try {
     const decks = loadDecks();
     let skip = 0;
@@ -143,39 +191,17 @@ async function syncDecks({ format, limit }) {
       const summaries = page.decks || [];
       if (!summaries.length) break;
 
-      for (const summary of summaries) {
-        if (imported >= limit) break;
+      let i = 0;
+      while (i < summaries.length && imported < limit) {
+        const batch = summaries.slice(i, i + Math.min(SYNC_BATCH_SIZE, limit - imported));
+        i += batch.length;
+        const results = await Promise.allSettled(batch.map((summary) => syncOneDeck(decks, summary)));
+        results.forEach((r, idx) => {
+          if (r.status === "fulfilled") imported++;
+          else console.error(`Skipping deck ${batch[idx].deckId}: ${r.reason.message}`);
+        });
+        syncProgress.imported = imported;
         await sleep(SYNC_DELAY_MS);
-        try {
-          const deck = await httpsGetJson(`https://swudb.com/api/deck/${summary.deckId}`);
-          const leaderRef = cardRef(deck.leader);
-          const secondLeaderRef = cardRef(deck.secondLeader);
-          const baseRef = cardRef(deck.base);
-          const [leaderAspects, secondLeaderAspects, baseAspects] = await Promise.all([
-            resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef),
-          ]);
-          const cards = (deck.shuffledDeck || []).map((entry) => ({
-            ...cardRef(entry.card),
-            count: entry.count,
-          }));
-          decks[summary.deckId] = {
-            deckId: summary.deckId,
-            deckName: deck.deckName,
-            authorName: deck.authorName,
-            deckFormat: deck.deckFormat,
-            leader: leaderRef,
-            secondLeader: secondLeaderRef,
-            base: baseRef,
-            colors: [...new Set([...leaderAspects, ...secondLeaderAspects, ...baseAspects])],
-            likeCount: deck.likeCount,
-            publishDate: deck.publishDate,
-            cards,
-            manaCurve: await computeManaCurve(cards),
-          };
-          imported++;
-        } catch (err) {
-          console.error(`Skipping deck ${summary.deckId}: ${err.message}`);
-        }
       }
 
       if (page.endOfResults) break;
@@ -186,6 +212,7 @@ async function syncDecks({ format, limit }) {
     return { imported, total: Object.keys(decks).length };
   } finally {
     syncInProgress = false;
+    syncProgress.active = false;
   }
 }
 
@@ -297,6 +324,12 @@ function handleRequest(req, res) {
         res.writeHead(409, { "content-type": "application/json" });
         res.end(JSON.stringify({ error: err.message }));
       });
+    return;
+  }
+
+  if (url.pathname === "/api/decks/sync/progress") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(syncProgress));
     return;
   }
 

@@ -535,7 +535,14 @@ refreshDeckDbStatus();
 deckSyncBtn.addEventListener("click", async () => {
   deckSyncBtn.disabled = true;
   deckSyncStatus.className = "status";
-  deckSyncStatus.textContent = "Import en cours… (ça peut prendre 1-2 minutes)";
+  deckSyncStatus.textContent = "Import en cours…";
+  const progressTimer = setInterval(async () => {
+    try {
+      const res = await fetch("/api/decks/sync/progress");
+      const p = await res.json();
+      if (p.active) deckSyncStatus.textContent = `Import en cours… ${p.imported}/${p.total} decks`;
+    } catch { /* tant pis, on attend juste la réponse finale */ }
+  }, 1000);
   try {
     const res = await fetch("/api/decks/sync?format=Premier&limit=200", { method: "POST" });
     const data = await res.json();
@@ -546,6 +553,7 @@ deckSyncBtn.addEventListener("click", async () => {
     deckSyncStatus.className = "status err";
     deckSyncStatus.textContent = `Erreur d'import : ${err.message}`;
   } finally {
+    clearInterval(progressTimer);
     deckSyncBtn.disabled = false;
   }
 });
