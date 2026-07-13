@@ -600,12 +600,16 @@ function previewAttrs(set, number){
 
 function manaCurveHtml(curve){
   if (!curve || !curve.some((n) => n > 0)) return "";
-  const max = Math.max(...curve);
-  const bars = curve.map((n, cost) => `
+  const shown = curve.slice(1); // le coût 0 est quasi toujours vide, pas utile à afficher
+  const max = Math.max(...shown);
+  const bars = shown.map((n, i) => {
+    const cost = i + 1;
+    return `
     <div class="manacurve-col" title="${n} carte(s) à coût ${cost === 6 ? "6+" : cost}">
       <div class="manacurve-bar" style="height:${max ? Math.max(3, Math.round((n / max) * 28)) : 3}px"></div>
       <div class="manacurve-label">${cost === 6 ? "6+" : cost}</div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   return `<div class="manacurve" title="Courbe de mana">${bars}</div>`;
 }
 

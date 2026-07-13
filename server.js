@@ -63,62 +63,48 @@ function cardRef(card) {
 }
 
 // swudb.com's own API only exposes aspects as undocumented numeric codes, so
-// card info (aspects, cost, type) is resolved from the official api.swu-db.com
-// data instead (one fetch per set, cached for the process lifetime, keyed by
-// card number). api.swu-db.com's per-set endpoint is very slow (6-14s observed)
-// so the cache stores the in-flight *promise*, not just the resolved value —
+// aspects are resolved from the official api.swu-db.com data instead (one
+// fetch per set, cached for the process lifetime, keyed by card number).
+// api.swu-db.com's per-set endpoint is very slow (6-14s observed) so the
+// cache stores the in-flight *promise*, not just the resolved value —
 // concurrent lookups for the same not-yet-cached set share one fetch instead
 // of each kicking off their own.
-const setCardInfoCache = new Map();
+const setAspectsCache = new Map();
 
-function getSetCardInfo(set) {
+function getSetAspects(set) {
   const key = set.toLowerCase();
-  if (setCardInfoCache.has(key)) return setCardInfoCache.get(key);
+  if (setAspectsCache.has(key)) return setAspectsCache.get(key);
   const promise = (async () => {
     const map = new Map();
     try {
       const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
-      for (const c of data.data || []) {
-        map.set(c.Number, { aspects: c.Aspects || [], cost: c.Cost, type: c.Type || "" });
-      }
+      for (const c of data.data || []) map.set(c.Number, c.Aspects || []);
     } catch (err) {
-      console.error(`Could not load card info for set ${set}: ${err.message}`);
+      console.error(`Could not load aspects for set ${set}: ${err.message}`);
     }
     return map;
   })();
-  setCardInfoCache.set(key, promise);
+  setAspectsCache.set(key, promise);
   return promise;
 }
 
 async function resolveAspects(ref) {
   if (!ref || !ref.set || !ref.number) return [];
-  const map = await getSetCardInfo(ref.set);
-  return (map.get(ref.number) || {}).aspects || [];
+  const map = await getSetAspects(ref.set);
+  return map.get(ref.number) || [];
 }
 
-async function resolveCardInfo(ref) {
-  if (!ref || !ref.set || !ref.number) return null;
-  const map = await getSetCardInfo(ref.set);
-  return map.get(ref.number) || null;
-}
-
-// Buckets a deck's non-leader/base cards by cost into a 0..6 histogram
-// (6 = "6 or more"), weighted by copy count, for a mana-curve display.
-// Prefetches every distinct set among the deck's cards in parallel first —
-// looking them up one card at a time would serialize api.swu-db.com's slow
-// per-set fetches instead of overlapping them.
-async function computeManaCurve(cards) {
-  const sets = [...new Set(cards.map((c) => c.set).filter(Boolean))];
-  await Promise.all(sets.map((s) => getSetCardInfo(s)));
-
+// Buckets a deck's maindeck cards by cost into a 0..6 histogram (6 = "6 or
+// more"), weighted by copy count, for a mana-curve display. swudb.com's own
+// deck API already includes each card's cost inline (shuffledDeck[].card.cost)
+// so this needs no extra lookup against api.swu-db.com's slow per-set endpoint.
+function computeManaCurve(shuffledDeck) {
   const curve = [0, 0, 0, 0, 0, 0, 0];
-  for (const card of cards) {
-    const info = await resolveCardInfo(card);
-    if (!info || info.type === "Leader" || info.type === "Base") continue;
-    const cost = parseInt(info.cost, 10);
+  for (const entry of shuffledDeck || []) {
+    if (!entry.count) continue; // sideboard-only copy, not in the 50-card deck
+    const cost = parseInt(entry.card && entry.card.cost, 10);
     if (Number.isNaN(cost)) continue;
-    const bucket = Math.min(cost, 6);
-    curve[bucket] += card.count || 1;
+    curve[Math.min(cost, 6)] += entry.count;
   }
   return curve;
 }
@@ -153,10 +139,10 @@ async function syncOneDeck(decks, summary) {
     ...cardRef(entry.card),
     count: entry.count,
   }));
-  const [[leaderAspects, secondLeaderAspects, baseAspects], manaCurve] = await Promise.all([
-    Promise.all([resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef)]),
-    computeManaCurve(cards),
+  const [leaderAspects, secondLeaderAspects, baseAspects] = await Promise.all([
+    resolveAspects(leaderRef), resolveAspects(secondLeaderRef), resolveAspects(baseRef),
   ]);
+  const manaCurve = computeManaCurve(deck.shuffledDeck);
   decks[summary.deckId] = {
     deckId: summary.deckId,
     deckName: deck.deckName,
