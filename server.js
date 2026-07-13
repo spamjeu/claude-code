@@ -295,7 +295,8 @@ function handleRequest(req, res) {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    const type = ext === ".html" ? "text/html" : ext === ".js" ? "text/javascript" : "application/octet-stream";
+    const type = ext === ".html" ? "text/html" : ext === ".js" ? "text/javascript"
+      : ext === ".png" ? "image/png" : "application/octet-stream";
     res.writeHead(200, { "content-type": type });
     res.end(data);
   });
