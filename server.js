@@ -192,11 +192,16 @@ function toResult(deck, matches) {
 // Separate multiple card names with a comma or a "+" to require all of them
 // (AND) in the same deck. An empty query lists every deck (e.g. to sort by
 // favorites without filtering by card).
-function findDecksByCard(query) {
+function findDecksByCard(query, colors) {
   const decks = loadDecks();
   const needles = query.split(/[,+]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const wantedColors = (colors || []).map((c) => c.trim()).filter(Boolean);
   const results = [];
   for (const deck of Object.values(decks)) {
+    if (wantedColors.length) {
+      const deckColors = deck.colors || [];
+      if (!wantedColors.every((c) => deckColors.includes(c))) continue;
+    }
     if (!needles.length) {
       results.push(toResult(deck, []));
       continue;
@@ -262,8 +267,9 @@ function handleRequest(req, res) {
 
   if (url.pathname === "/api/decks/by-card") {
     const q = url.searchParams.get("q") || "";
+    const colors = (url.searchParams.get("colors") || "").split(",").filter(Boolean);
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ decks: findDecksByCard(q) }));
+    res.end(JSON.stringify({ decks: findDecksByCard(q, colors) }));
     return;
   }
 

@@ -185,6 +185,15 @@
       </select>
       <button class="primary" id="deckSearch">Chercher les decks</button>
     </div>
+    <div class="row" id="deckColorFilters" style="margin-top:6px">
+      <span class="sub">Couleurs préférées (le deck doit contenir toutes celles cochées) :</span>
+      <label><input type="checkbox" name="deckColor" value="Vigilance" /> Vigilance</label>
+      <label><input type="checkbox" name="deckColor" value="Command" /> Command</label>
+      <label><input type="checkbox" name="deckColor" value="Aggression" /> Aggression</label>
+      <label><input type="checkbox" name="deckColor" value="Cunning" /> Cunning</label>
+      <label><input type="checkbox" name="deckColor" value="Heroism" /> Heroism</label>
+      <label><input type="checkbox" name="deckColor" value="Villainy" /> Villainy</label>
+    </div>
     <div class="status" id="deckSearchStatus"></div>
     <div id="deckResults"></div>
     <div class="hint">
@@ -518,20 +527,27 @@ function renderDeckResults(decks){
 deckSortSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
 deckGroupSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
 
+function selectedDeckColors(){
+  return [...document.querySelectorAll('input[name="deckColor"]:checked')].map((el) => el.value);
+}
+
 async function searchDecksByCard() {
   const q = deckCardQ.value.trim();
+  const colors = selectedDeckColors();
   deckSearchStatus.className = "status";
   deckSearchStatus.textContent = "Recherche…";
   deckResultsEl.innerHTML = "";
   try {
-    const res = await fetch(`/api/decks/by-card?q=${encodeURIComponent(q)}`);
+    const params = new URLSearchParams({ q });
+    if (colors.length) params.set("colors", colors.join(","));
+    const res = await fetch(`/api/decks/by-card?${params}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     const decks = data.decks || [];
     lastDeckResults = decks;
     if (!decks.length) {
-      deckSearchStatus.textContent = q
-        ? "Aucun deck trouvé (importe d'abord la base, ou vérifie l'orthographe des cartes)."
+      deckSearchStatus.textContent = (q || colors.length)
+        ? "Aucun deck ne correspond (carte, couleurs, ou base pas encore importée)."
         : "Base de decks locale vide — importe des decks d'abord.";
       return;
     }
@@ -544,6 +560,9 @@ async function searchDecksByCard() {
 }
 deckSearchBtn.addEventListener("click", searchDecksByCard);
 deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });
+document.querySelectorAll('input[name="deckColor"]').forEach((el) => {
+  el.addEventListener("change", searchDecksByCard);
+});
 
 // --- Aperçu de carte au survol ---
 const cardPreviewEl = $("#cardPreview");
