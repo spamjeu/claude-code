@@ -419,7 +419,7 @@ async function loadCardStats(){
   try {
     const res = await fetch("/api/cards/stats");
     const data = await res.json();
-    for (const c of data.cards || []) cardStatsIndex.set(c.cardName, c);
+    for (const c of data.cards || []) cardStatsIndex.set((c.cardName || "").toLowerCase(), c);
     if (data.seasonStart) {
       statsSeasonStart = data.seasonStart;
       const el = document.getElementById("cardStatsSeasonLabel");
@@ -433,10 +433,10 @@ function cardStatsFor(card){
   const name = pick(card, ["Name","name"]) || "";
   const subtitle = pick(card, ["Subtitle","subtitle"]) || "";
   if (subtitle) {
-    const uniqueKey = `${name}, ${subtitle}`;
+    const uniqueKey = `${name}, ${subtitle}`.toLowerCase();
     if (cardStatsIndex.has(uniqueKey)) return cardStatsIndex.get(uniqueKey);
   }
-  return cardStatsIndex.get(name) || null;
+  return cardStatsIndex.get(name.toLowerCase()) || null;
 }
 
 function cardStatsBadgeHtml(card){
@@ -571,7 +571,11 @@ async function loadMetaArchetypes(){
     const data = await res.json();
     for (const a of data.archetypes || []) {
       const key = `${a.leaderTitle}${a.leaderSubtitle ? " | " + a.leaderSubtitle : ""}||${a.baseTitle}`;
-      metaArchetypeIndex.set(key, a);
+      // Clé en minuscules : swustats.net et swudb.com ne sont pas toujours
+      // d'accord sur la casse d'un même nom (ex: "Still Faster than You" vs
+      // "Still Faster Than You"), ce qui ferait échouer silencieusement un
+      // match sensible à la casse.
+      metaArchetypeIndex.set(key.toLowerCase(), a);
     }
     if (data.seasonStart) {
       statsSeasonStart = data.seasonStart;
@@ -583,8 +587,13 @@ async function loadMetaArchetypes(){
 loadMetaArchetypes();
 function metaFor(d){
   if (!d.leaderName) return null;
-  const key = `${d.leaderName}${d.leaderTitle ? " | " + d.leaderTitle : ""}||${d.baseName || ""}`;
-  return metaArchetypeIndex.get(key) || null;
+  // swustats.net folds a base's subtitle into baseTitle as "Nom, Sous-titre"
+  // (unlike leaders, where subtitle is a separate field) — reproduce that
+  // here so named bases like "Nevarro City, Restored" actually match instead
+  // of silently missing.
+  const base = `${d.baseName || ""}${d.baseTitle ? ", " + d.baseTitle : ""}`;
+  const key = `${d.leaderName}${d.leaderTitle ? " | " + d.leaderTitle : ""}||${base}`;
+  return metaArchetypeIndex.get(key.toLowerCase()) || null;
 }
 
 function formatCooldown(ms){

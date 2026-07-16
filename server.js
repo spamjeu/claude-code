@@ -145,6 +145,16 @@ function computeManaCurve(shuffledDeck) {
 // API has no metaShare field, only numPlays (raw count) and a
 // string-percentage winRate — see metaBadgeHtml() in index.html for how
 // that's rendered.
+//
+// Deliberately NOT passing consolidate=1: that flag merges every
+// mechanically-equivalent "common" base (same color+type) into a single row
+// under one arbitrary representative base name/image, which breaks the
+// name-based matching in loadMetaArchetypes()/metaFor() (index.html) for any
+// deck whose actual base isn't that representative one — e.g. "Nevarro City,
+// Restored" and "City in the Clouds" both silently disappeared into a
+// "Shield Generator Complex" bucket under consolidate=1, showing no stats
+// for real decks that do have data. consolidate=0 (the default) keeps one
+// row per exact base, matching how local decks are keyed.
 let metaArchetypesCache = { data: null, fetchedAt: 0 };
 
 async function getMetaArchetypes() {
@@ -152,7 +162,7 @@ async function getMetaArchetypes() {
   if (metaArchetypesCache.data && age < META_CACHE_MS) return metaArchetypesCache.data;
   try {
     const data = await httpsGetJson(
-      `https://swustats.net/TCGEngine/Stats/DeckMetaStatsAPI.php?startWeek=${ASH_START_WEEK}&format=Premier&consolidate=1`
+      `https://swustats.net/TCGEngine/Stats/DeckMetaStatsAPI.php?startWeek=${ASH_START_WEEK}&format=Premier`
     );
     metaArchetypesCache = { data: Array.isArray(data) ? data : [], fetchedAt: Date.now() };
   } catch (err) {
@@ -298,6 +308,7 @@ function toResult(deck, matches) {
     leaderSet: leaderRef && leaderRef.set,
     leaderNumber: leaderRef && leaderRef.number,
     baseName: baseRef && baseRef.name,
+    baseTitle: baseRef && baseRef.title,
     baseSet: baseRef && baseRef.set,
     baseNumber: baseRef && baseRef.number,
     colors: deck.colors || [],
