@@ -224,6 +224,9 @@
       <code>t:</code> texte, <code>ty:</code> type, <code>a:</code> aspect, <code>ar:</code> arena, <code>r:</code> rareté,
       <code>set:</code> set, <code>c=</code>/<code>p=</code>/<code>h=</code> coût/power/HP, <code>AND</code>/<code>OR</code>, parenthèses.
       Doc complète : <a href="https://www.swu-db.com/syntax" target="_blank" rel="noopener">swu-db.com/syntax</a>.
+      Le badge 🎯 winrate carte, quand présent, vient de l'API publique de
+      <a href="https://swustats.net/TCGEngine/Stats/CardMetaStats.php" target="_blank" rel="noopener">SWU Stats</a>,
+      <span id="cardStatsSeasonLabel">saison Ashes of the Empire</span>.
     </div>
     <div class="status" id="status"></div>
   </section>
@@ -273,7 +276,7 @@
       Source des decks : API interne (non documentée) de
       <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>. Le badge 📊 "winrate" quand
       présent vient de l'API publique de <a href="https://swustats.net/TCGEngine/Stats/DeckMetaStats.php" target="_blank" rel="noopener">SWU Stats</a>,
-      scopée à la saison Ashes of the Empire (format Premier, croisé par leader + base — n'apparaît que pour les archétypes qu'ils suivent déjà).
+      scopée à la saison <span id="deckStatsSeasonLabel">Ashes of the Empire</span> (format Premier, croisé par leader + base — n'apparaît que pour les archétypes qu'ils suivent déjà).
     </div>
   </section>
   </section>
@@ -393,6 +396,19 @@ function extractArray(data){
   return [];
 }
 
+// Date de départ de la période couverte par les stats swustats.net (renvoyée
+// par le serveur, dérivée de ASH_RELEASE_DATE_MS dans server.js), affichée
+// dans les badges et les textes d'aide pour qu'on sache de quand elles
+// datent plutôt que de juste voir "ASH" sans repère temporel.
+let statsSeasonStart = null;
+function formatFrDate(iso){
+  if (!iso) return "";
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" });
+}
+function seasonPeriodLabel(){
+  return statsSeasonStart ? `depuis le ${formatFrDate(statsSeasonStart)}` : "";
+}
+
 // Per-card win-rate stats via swustats.net's Card Meta Stats API, scoped to
 // the ASH season (see server.js's ASH_START_WEEK), loaded once. Unique cards
 // (leaders/bases) are keyed "Name, Subtitle"; non-unique cards presumably by
@@ -404,6 +420,11 @@ async function loadCardStats(){
     const res = await fetch("/api/cards/stats");
     const data = await res.json();
     for (const c of data.cards || []) cardStatsIndex.set(c.cardName, c);
+    if (data.seasonStart) {
+      statsSeasonStart = data.seasonStart;
+      const el = document.getElementById("cardStatsSeasonLabel");
+      if (el) el.textContent = `saison Ashes of the Empire (${seasonPeriodLabel()})`;
+    }
   } catch { /* pas grave, on affichera juste sans stats carte */ }
 }
 loadCardStats();
@@ -423,7 +444,7 @@ function cardStatsBadgeHtml(card){
   if (!stats) return "";
   const winIncl = parseFloat(stats.percentIncludedInWins).toFixed(1);
   const winPlayed = parseFloat(stats.percentPlayedInWins).toFixed(1);
-  return `<span class="badge cardstats-badge" title="Données swustats.net, saison Ashes of the Empire">🎯 ${winIncl}% winrate (inclus) · ${winPlayed}% winrate (jouée) · ${stats.timesIncluded} decks</span>`;
+  return `<span class="badge cardstats-badge" title="Données swustats.net, saison Ashes of the Empire ${seasonPeriodLabel()}">🎯 ${winIncl}% winrate (inclus) · ${winPlayed}% winrate (jouée) · ${stats.timesIncluded} decks</span>`;
 }
 
 function highlight(text, term){
@@ -552,6 +573,11 @@ async function loadMetaArchetypes(){
       const key = `${a.leaderTitle}${a.leaderSubtitle ? " | " + a.leaderSubtitle : ""}||${a.baseTitle}`;
       metaArchetypeIndex.set(key, a);
     }
+    if (data.seasonStart) {
+      statsSeasonStart = data.seasonStart;
+      const el = document.getElementById("deckStatsSeasonLabel");
+      if (el) el.textContent = `Ashes of the Empire (${seasonPeriodLabel()})`;
+    }
   } catch { /* pas grave, on affichera juste sans stats méta */ }
 }
 loadMetaArchetypes();
@@ -658,7 +684,7 @@ function metaBadgeHtml(d){
   if (!meta) return "";
   const winRate = parseFloat(meta.winRate).toFixed(1);
   const plays = meta.numPlays ?? 0;
-  return `<span class="badge meta-badge" title="Données swustats.net, saison Ashes of the Empire, format Premier">📊 ${winRate}% winrate (${plays} parties, ASH)</span>`;
+  return `<span class="badge meta-badge" title="Données swustats.net, saison Ashes of the Empire ${seasonPeriodLabel()}, format Premier">📊 ${winRate}% winrate (${plays} parties, ASH)</span>`;
 }
 
 function deckRowHtml(d){

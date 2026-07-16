@@ -37,6 +37,9 @@ const SYNC_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const SWUSTATS_WEEK_ANCHOR_MS = Date.UTC(2025, 8, 20);
 const ASH_RELEASE_DATE_MS = Date.UTC(2026, 6, 11);
 const ASH_START_WEEK = Math.floor((ASH_RELEASE_DATE_MS - SWUSTATS_WEEK_ANCHOR_MS) / (7 * 24 * 60 * 60 * 1000));
+// Exposed to the client alongside stats so the UI can show what period the
+// numbers cover (e.g. "depuis le 11/07/2026") instead of just "ASH".
+const ASH_SEASON_START_ISO = new Date(ASH_RELEASE_DATE_MS).toISOString().slice(0, 10);
 
 // Milliseconds until another sync is allowed, or 0 if one can start now.
 function syncCooldownRemaining() {
@@ -396,7 +399,7 @@ function handleRequest(req, res) {
     getMetaArchetypes()
       .then((archetypes) => {
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ archetypes }));
+        res.end(JSON.stringify({ archetypes, seasonStart: ASH_SEASON_START_ISO }));
       })
       .catch((err) => {
         res.writeHead(502, { "content-type": "application/json" });
@@ -409,7 +412,7 @@ function handleRequest(req, res) {
     getCardStats()
       .then((cards) => {
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ cards }));
+        res.end(JSON.stringify({ cards, seasonStart: ASH_SEASON_START_ISO }));
       })
       .catch((err) => {
         res.writeHead(502, { "content-type": "application/json" });
