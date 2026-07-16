@@ -24,6 +24,20 @@ const SYNC_DELAY_MS = 200;
 const META_CACHE_MS = 60 * 60 * 1000;
 const SYNC_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
+// swustats.net buckets stats into 7-day "weeks" numbered from an undocumented
+// anchor (Wk 0 = 2025-09-20, per a hardcoded `currentWeek` constant found in
+// that site's own front-end JS — there is no API field that exposes this
+// scheme, so treat it as fragile/inferred, not documented). Ashes of the
+// Empire (ASH) released 2026-07-11. Passing this as `startWeek` with no
+// `endWeek` to swustats.net's stat APIs gets "ASH season onward" without us
+// tracking "current week" ourselves.
+// UPDATE WHEN A NEW SET BECOMES THE SEASON TO ISOLATE: change
+// ASH_RELEASE_DATE_MS to the new set's release date (and re-verify the week
+// anchor still holds, in case swustats.net ever changes its own numbering).
+const SWUSTATS_WEEK_ANCHOR_MS = Date.UTC(2025, 8, 20);
+const ASH_RELEASE_DATE_MS = Date.UTC(2026, 6, 11);
+const ASH_START_WEEK = Math.floor((ASH_RELEASE_DATE_MS - SWUSTATS_WEEK_ANCHOR_MS) / (7 * 24 * 60 * 60 * 1000));
+
 // Milliseconds until another sync is allowed, or 0 if one can start now.
 function syncCooldownRemaining() {
   try {
@@ -120,22 +134,50 @@ function computeManaCurve(shuffledDeck) {
   return curve;
 }
 
-// Meta presence (leader/base archetype share, win rate) from the community
-// site swumetastats.com's public API — cached for an hour since it's a
-// side-panel stat, not something that needs to be live per search.
+// Meta presence (leader/base archetype win rate) from swustats.net's public
+// Deck Meta Stats API, scoped to the ASH season via ASH_START_WEEK — cached
+// for an hour since it's a side-panel stat, not something that needs to be
+// live per search. Unlike the previous source (swumetastats.com, which
+// silently ignores season filters and always returns an all-time mix), this
+// API has no metaShare field, only numPlays (raw count) and a
+// string-percentage winRate — see metaBadgeHtml() in index.html for how
+// that's rendered.
 let metaArchetypesCache = { data: null, fetchedAt: 0 };
 
 async function getMetaArchetypes() {
   const age = Date.now() - metaArchetypesCache.fetchedAt;
   if (metaArchetypesCache.data && age < META_CACHE_MS) return metaArchetypesCache.data;
   try {
-    const data = await httpsGetJson("https://swumetastats.com/api/archetypes?format=Premier");
-    metaArchetypesCache = { data: data.archetypes || [], fetchedAt: Date.now() };
+    const data = await httpsGetJson(
+      `https://swustats.net/TCGEngine/Stats/DeckMetaStatsAPI.php?startWeek=${ASH_START_WEEK}&format=Premier&consolidate=1`
+    );
+    metaArchetypesCache = { data: Array.isArray(data) ? data : [], fetchedAt: Date.now() };
   } catch (err) {
     console.error(`Could not load meta archetypes: ${err.message}`);
     if (!metaArchetypesCache.data) metaArchetypesCache = { data: [], fetchedAt: Date.now() };
   }
   return metaArchetypesCache.data;
+}
+
+// Per-card stats (win rate when included/played/resourced) from swustats.net's
+// public Card Meta Stats API, scoped to ASH_START_WEEK (same season constant
+// as getMetaArchetypes(), so both stats sources stay consistent). Cached for
+// an hour, same pattern as metaArchetypesCache.
+let cardStatsCache = { data: null, fetchedAt: 0 };
+
+async function getCardStats() {
+  const age = Date.now() - cardStatsCache.fetchedAt;
+  if (cardStatsCache.data && age < META_CACHE_MS) return cardStatsCache.data;
+  try {
+    const data = await httpsGetJson(
+      `https://swustats.net/TCGEngine/APIs/CardMetaStatsAPI.php?startWeek=${ASH_START_WEEK}`
+    );
+    cardStatsCache = { data: Array.isArray(data) ? data : [], fetchedAt: Date.now() };
+  } catch (err) {
+    console.error(`Could not load card stats: ${err.message}`);
+    if (!cardStatsCache.data) cardStatsCache = { data: [], fetchedAt: Date.now() };
+  }
+  return cardStatsCache.data;
 }
 
 const SYNC_BATCH_SIZE = 5;
@@ -198,6 +240,7 @@ async function syncDecks({ format, limit }) {
           else console.error(`Skipping deck ${batch[idx].deckId}: ${r.reason.message}`);
         });
         syncProgress.imported = imported;
+        saveDecks(decks); // write incrementally so /api/decks/by-card sees growing data mid-sync
         await sleep(SYNC_DELAY_MS);
       }
 
@@ -354,6 +397,19 @@ function handleRequest(req, res) {
       .then((archetypes) => {
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ archetypes }));
+      })
+      .catch((err) => {
+        res.writeHead(502, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
+  if (url.pathname === "/api/cards/stats") {
+    getCardStats()
+      .then((cards) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ cards }));
       })
       .catch((err) => {
         res.writeHead(502, { "content-type": "application/json" });
