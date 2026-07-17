@@ -44,13 +44,6 @@ function metaFor(d){
   return metaArchetypeIndex.get(key.toLowerCase()) || null;
 }
 
-function formatCooldown(ms){
-  const totalMin = Math.ceil(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m} min`;
-}
-
 async function refreshDeckDbStatus(){
   try {
     const res = await fetch("/api/decks/status");
@@ -60,13 +53,6 @@ async function refreshDeckDbStatus(){
     } else {
       const date = new Date(data.lastSyncedAt);
       deckDbStatusEl.textContent = `${data.count} deck(s) en base — dernière synchro : ${date.toLocaleString("fr-FR")}`;
-    }
-    if (data.cooldownMs > 0) {
-      deckSyncBtn.disabled = true;
-      deckSyncBtn.title = `Prochaine synchro possible dans ${formatCooldown(data.cooldownMs)} (limite : une synchro toutes les 2h)`;
-    } else {
-      deckSyncBtn.disabled = false;
-      deckSyncBtn.title = "";
     }
   } catch {
     deckDbStatusEl.textContent = "";
@@ -121,11 +107,10 @@ function metaBadgeHtml(d){
 
 function priceHtml(d){
   if (!d.price) return `<span class="muted">—</span>`;
-  const euros = (d.price.cents / 100).toFixed(2).replace(".", ",");
-  const prefix = d.price.complete ? "" : "~";
-  const title = "Estimation CardTrader : annonce la moins chère par carte (non-foil, non signée/altérée, état Near Mint ou Slightly Played), hors frais de port." +
-    (d.price.complete ? "" : " Incomplet : au moins une carte du deck n'a pas d'annonce correspondante.");
-  return `<span title="${title}">${prefix}${euros} €</span>`;
+  const market = d.price.market.toFixed(2).replace(".", ",");
+  const low = d.price.low.toFixed(2).replace(".", ",");
+  const title = `Prix indicatif via TCGPlayer (source : swudb.com, en dollars, pas de calcul local) — prix bas : ${low} $ · prix marché : ${market} $.`;
+  return `<span title="${title}">${market} $</span>`;
 }
 
 function deckRowHtml(d){
@@ -159,7 +144,7 @@ function groupKeyFor(d){
     return { key: `${colors}__${d.leaderName || "?"}`, label: `${colorDots(d.colors)} ${d.leaderName || "Leader inconnu"}` };
   }
   if (deckGroupSel.value === "set") {
-    const set = (d.matches[0] && d.matches[0].set) || "?";
+    const set = d.leaderSet || "?";
     return { key: set, label: `Extension ${set}` };
   }
   return null;
@@ -167,8 +152,15 @@ function groupKeyFor(d){
 
 const DECKTABLE_HEAD = `
   <thead><tr>
-    <th>❤️</th><th>Couleurs</th><th>Deck</th><th>Courbe de mana</th><th>Winrate (ASH, Premier)</th><th>Prix</th>
+    <th>❤️</th><th>Couleurs</th><th>Deck</th><th>Courbe de mana</th><th>Winrate (ASH, Premier)</th><th>Prix (TCGPlayer)</th>
   </tr></thead>`;
+
+// Clé de groupe -> replié ou non. Survit aux re-rendus (tri, ajout de decks
+// pendant un sync) tant que le regroupement choisi ne change pas, pour que
+// cliquer "réduire" sur un gros groupe (ex: beaucoup de decks JTL) ne se
+// réinitialise pas à chaque petit rafraîchissement.
+let collapsedGroups = new Set();
+let lastGroupKeys = [];
 
 function renderDeckResults(decks){
   const sorted = sortDecks(decks);
@@ -183,13 +175,29 @@ function renderDeckResults(decks){
     if (!groups.has(key)) groups.set(key, { label, decks: [] });
     groups.get(key).decks.push(d);
   }
-  deckResultsEl.innerHTML = [...groups.values()].map((g) => `
-    <div class="deckgroup">
-      <div class="deckgroup-title">${g.label} <span class="muted">(${g.decks.length} deck${g.decks.length > 1 ? "s" : ""})</span></div>
+  const entries = [...groups.entries()];
+  lastGroupKeys = entries.map(([key]) => key);
+  deckResultsEl.innerHTML = entries.map(([key, g], i) => {
+    const collapsed = collapsedGroups.has(key);
+    return `
+    <div class="deckgroup${collapsed ? " collapsed" : ""}">
+      <button type="button" class="deckgroup-title" data-group-index="${i}">
+        <span class="deckgroup-caret">${collapsed ? "▸" : "▾"}</span>
+        ${g.label} <span class="muted">(${g.decks.length} deck${g.decks.length > 1 ? "s" : ""})</span>
+      </button>
       <div class="decklist-wrap"><table class="decktable">${DECKTABLE_HEAD}
         <tbody>${g.decks.map(deckRowHtml).join("")}</tbody></table></div>
     </div>
-  `).join("");
+  `;
+  }).join("");
+}
+
+function toggleGroupCollapse(index){
+  const key = lastGroupKeys[index];
+  if (key === undefined) return;
+  if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+  else collapsedGroups.add(key);
+  if (lastDeckResults.length) renderDeckResults(lastDeckResults);
 }
 
 function selectedDeckColors(){
@@ -307,6 +315,7 @@ window.SWU_TABS.decks = function initDecksTab(){
     } finally {
       clearInterval(progressTimer);
       deckSyncBtn.classList.remove("loading");
+      deckSyncBtn.disabled = false;
       refreshDeckDbStatus();
     }
   });
@@ -334,6 +343,11 @@ window.SWU_TABS.decks = function initDecksTab(){
 
   deckSortSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
   deckGroupSel.addEventListener("change", () => { if (lastDeckResults.length) renderDeckResults(lastDeckResults); });
+  deckResultsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".deckgroup-title");
+    if (!btn) return;
+    toggleGroupCollapse(Number(btn.dataset.groupIndex));
+  });
 
   deckSearchBtn.addEventListener("click", searchDecksByCard);
   deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });

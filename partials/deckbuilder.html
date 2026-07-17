@@ -12,15 +12,33 @@
     <select id="dbLeaderSelect">
       <option value="">Choisis un leader (optionnel)</option>
     </select>
+    <select id="dbBaseSelect">
+      <option value="">Choisis une base (optionnel)</option>
+    </select>
     <button id="dbReset">Réinitialiser</button>
   </div>
   <div class="row" style="margin-top:10px">
     <input id="dbCardQ" type="text" list="dbCardNamesList" placeholder="Ajouter une carte par son nom" />
     <datalist id="dbCardNamesList"></datalist>
+    <select id="dbCardCount">
+      <option value="1">x1</option>
+      <option value="2">x2</option>
+      <option value="3" selected>x3</option>
+    </select>
     <button class="primary" id="dbAddCard">Ajouter</button>
   </div>
   <div class="chips" id="dbSelectedCards"></div>
   <div class="status" id="dbStatus"></div>
+  <div class="row" style="margin-top:10px">
+    <button id="dbCopyMelee">📋 Copier pour swudb (colle-le avec leur bouton "Melee")</button>
+    <span class="status" id="dbCopyStatus"></span>
+  </div>
+  <div class="hint">
+    swudb.com (page "My Decks") a un bouton "Melee" qui construit un deck à partir du texte présent
+    dans ton presse-papier. Ce bouton génère ce texte pour toi — clique-le, va sur swudb, clique
+    "Melee". Format reconstitué à partir de leur doc publique (pas garanti à 100% du premier coup) :
+    si l'import échoue, dis-moi le message d'erreur affiché par swudb et j'ajuste le format.
+  </div>
 </section>
 
 <section class="grid" id="dbSuggestions"></section>

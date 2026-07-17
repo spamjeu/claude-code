@@ -57,33 +57,14 @@ jouent la carte X" :
   dont au moins une carte matche le nom tapé, avec un lien vers la page du deck sur
   SWUDB.
 
-### Prix estimé du deck (optionnel, CardTrader)
+### Prix estimé du deck (TCGPlayer, via swudb.com)
 
-La colonne "Prix" du tableau de decks affiche une estimation du coût du deck via
-l'API de [CardTrader](https://www.cardtrader.com) (marketplace européen, prix en EUR).
-Pour l'activer :
-
-1. Crée un compte gratuit sur cardtrader.com.
-2. Récupère un token dans les paramètres de ton profil (Bearer token).
-3. Crée un fichier `.env` à la racine du projet (ignoré par git) avec :
-   ```
-   CARDTRADER_TOKEN=ton_token_ici
-   ```
-4. Relance `node server.js`.
-
-Sans ce token, la colonne "Prix" affiche simplement "—" (le reste de l'outil
-fonctionne normalement). Le prix retenu par carte est le moins cher parmi les
-annonces non-foil, non signées/altérées, en état Near Mint ou Slightly Played,
-toutes langues confondues — c'est une estimation basse ("combien ça coûterait de
-réunir ce deck en bon état"), hors frais de port, pas un prix garanti. Un `~`
-devant le total signifie qu'au moins une carte du deck n'a pas d'annonce
-correspondante sur CardTrader (deck partiellement pricé).
-
-Le serveur construit un catalogue local (`data/cardtrader-catalog.json`, sets
-principaux uniquement) et un index de prix (`data/prices.json`, uniquement pour
-les cartes réellement utilisées par des decks synchronisés localement) —
-tous deux créés automatiquement, ignorés par git, rafraîchis en tâche de fond
-(catalogue : ~1x/jour, prix : ~1x/2h) indépendamment du bouton "Importer".
+La colonne "Prix (TCGPlayer)" du tableau de decks reprend directement le champ
+`priceDetail` déjà présent dans la réponse de l'API deck de swudb.com — aucun
+appel réseau ni compte/clé supplémentaire nécessaire. C'est un prix indicatif
+en **dollars** (source TCGPlayer, marketplace américain), pas un prix garanti
+ni une conversion en euros. Le tableau affiche le "prix marché" ; le détail
+(prix bas + prix marché) est visible en survolant la valeur.
 
 ## Données
 

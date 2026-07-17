@@ -15,7 +15,7 @@
     <select id="deckGroup">
       <option value="none">Pas de regroupement</option>
       <option value="leader">Regrouper par couleurs + leader</option>
-      <option value="set">Regrouper par extension de la carte</option>
+      <option value="set">Regrouper par extension du leader</option>
     </select>
     <button class="primary" id="deckSearch">Chercher les decks</button>
   </div>
@@ -31,7 +31,7 @@
   <div class="status" id="deckSearchStatus"></div>
   <div id="deckResults"></div>
   <div class="hint">
-    L'import ne fait que fusionner/mettre à jour la base locale (une synchro toutes les 2h maximum).
+    L'import ne fait que fusionner/mettre à jour la base locale.
     Source des decks : API interne (non documentée) de
     <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>. Le badge 📊 "winrate" quand
     présent vient de l'API publique de <a href="https://swustats.net/TCGEngine/Stats/DeckMetaStats.php" target="_blank" rel="noopener">SWU Stats</a>,
