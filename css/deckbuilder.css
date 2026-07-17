@@ -2,3 +2,6 @@
 #dbSelectedCards .chip{background:var(--accent);color:#14100a;border-color:var(--accent)}
 #dbSelectedCards .chip:hover{background:var(--bad);border-color:var(--bad);color:#fff}
 #dbSuggestions .card .body{padding-bottom:10px}
+.db-suggest-add{margin-top:auto;padding-top:4px}
+.db-suggest-add select{flex:0 0 auto}
+.db-suggest-add button{flex:1}

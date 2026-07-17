@@ -423,13 +423,21 @@ function listBases() {
   return [...byKey.values()].sort((a, b) => b.deckCount - a.deckCount);
 }
 
-function listCardNames() {
+// One ref per distinct card name (first printing seen — good enough to
+// identify the card for a set:number-based export; a deck rarely mixes
+// multiple printings of the same card anyway). Set+number is what
+// js/deckbuilder.js needs to build a swudb.com-importable JSON id
+// ("SET_NUMBER") for cards added via the free-text/datalist input, which
+// otherwise only carries a name.
+function listCardRefs() {
   const decks = Object.values(loadDecks());
-  const names = new Set();
+  const byName = new Map();
   for (const deck of decks) {
-    for (const c of deck.cards || []) if (c.name) names.add(c.name);
+    for (const c of deck.cards || []) {
+      if (c.name && !byName.has(c.name)) byName.set(c.name, { name: c.name, set: c.set || "", number: c.number || "" });
+    }
   }
-  return [...names].sort();
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Ranks every maindeck card (other than the ones already selected) by how
@@ -580,7 +588,7 @@ function handleRequest(req, res) {
 
   if (url.pathname === "/api/deckbuilder/cardnames") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ names: listCardNames() }));
+    res.end(JSON.stringify({ cards: listCardRefs() }));
     return;
   }
 
