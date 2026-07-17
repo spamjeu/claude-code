@@ -1,0 +1,55 @@
+<section class="panel">
+  <div class="row">
+    <input id="q" type="text" placeholder='Nom ou texte à chercher, ex: advantage ou Sabine' />
+    <select id="set">
+      <option value="">Tous les sets</option>
+      <option value="ash" selected>Ashes of the Empire (ASH)</option>
+      <option value="law">A Lawless Time (LAW)</option>
+      <option value="sec">Secrets of Power (SEC)</option>
+      <option value="lof">Legends of the Force (LOF)</option>
+      <option value="jtl">Jump to Lightspeed (JTL)</option>
+      <option value="twi">Twilight of the Republic (TWI)</option>
+      <option value="shd">Shadows of the Galaxy (SHD)</option>
+      <option value="sor">Spark of Rebellion (SOR)</option>
+    </select>
+    <select id="type">
+      <option value="">Tous les types</option>
+      <option value="unit">Unit</option>
+      <option value="upgrade">Upgrade</option>
+      <option value="event">Event</option>
+      <option value="leader">Leader</option>
+      <option value="base">Base</option>
+    </select>
+    <button class="primary" id="go">Rechercher</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <input type="hidden" id="aspect" value="" />
+    <div id="aspectPicker">
+      <button type="button" class="selected" data-value="">Tous les aspects</button>
+      <button type="button" data-value="vigilance"><img class="aspect-icon-sm" src="assets/aspects/vigilance.png" alt="" /> Vigilance</button>
+      <button type="button" data-value="command"><img class="aspect-icon-sm" src="assets/aspects/command.png" alt="" /> Command</button>
+      <button type="button" data-value="aggression"><img class="aspect-icon-sm" src="assets/aspects/aggression.png" alt="" /> Aggression</button>
+      <button type="button" data-value="cunning"><img class="aspect-icon-sm" src="assets/aspects/cunning.png" alt="" /> Cunning</button>
+      <button type="button" data-value="heroism"><img class="aspect-icon-sm" src="assets/aspects/heroism.png" alt="" /> Heroism</button>
+      <button type="button" data-value="villainy"><img class="aspect-icon-sm" src="assets/aspects/villainy.png" alt="" /> Villainy</button>
+    </div>
+  </div>
+  <div class="chips">
+    <button class="chip" data-preset="advantage-ash">🃏 Cartes "Advantage" (ASH)</button>
+    <button class="chip" data-preset="advantage-any">🌐 "Advantage" tous sets</button>
+    <button class="chip" data-preset="upgrades-ash">⬆️ Toutes les Upgrades ASH</button>
+    <button class="chip" data-preset="grant-token">🎯 "gain" + "advantage"</button>
+  </div>
+  <div class="hint">
+    Syntaxe libre supportée (transmise telle quelle à l'API si tu préfixes ta recherche par <code>raw:</code>) :
+    <code>t:</code> texte, <code>ty:</code> type, <code>a:</code> aspect, <code>ar:</code> arena, <code>r:</code> rareté,
+    <code>set:</code> set, <code>c=</code>/<code>p=</code>/<code>h=</code> coût/power/HP, <code>AND</code>/<code>OR</code>, parenthèses.
+    Doc complète : <a href="https://www.swu-db.com/syntax" target="_blank" rel="noopener">swu-db.com/syntax</a>.
+    Le badge 🎯 winrate carte, quand présent, vient de l'API publique de
+    <a href="https://swustats.net/TCGEngine/Stats/CardMetaStats.php" target="_blank" rel="noopener">SWU Stats</a>,
+    <span id="cardStatsSeasonLabel">saison Ashes of the Empire</span>.
+  </div>
+  <div class="status" id="status"></div>
+</section>
+
+<section class="grid" id="results"></section>

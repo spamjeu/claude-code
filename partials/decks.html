@@ -1,0 +1,44 @@
+<section class="panel">
+  <strong>🗂️ Base de decks locale (Premier)</strong>
+  <p class="sub" style="margin-top:6px">
+    Indexe localement des decks publiés sur SWUDB (format Premier) pour retrouver ceux qui jouent une carte donnée.
+    L'import tourne depuis <code>server.js</code> et le résultat est stocké dans <code>data/decks.json</code> sur ta
+    machine — rien n'est envoyé à un tiers.
+  </p>
+  <div class="status" id="deckDbStatus"></div>
+  <div class="row">
+    <button id="deckSync">Importer / mettre à jour (100 decks Premier "hot")</button>
+    <span class="status" id="deckSyncStatus"></span>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <input id="deckCardQ" type="text" placeholder="Nom de carte (sépare par , ou + pour plusieurs) — vide = tous les decks" />
+    <select id="deckSort">
+      <option value="likes">Trier par favoris ❤️</option>
+      <option value="leader">Trier par leader (A-Z)</option>
+    </select>
+    <select id="deckGroup">
+      <option value="none">Pas de regroupement</option>
+      <option value="leader">Regrouper par couleurs + leader</option>
+      <option value="set">Regrouper par extension de la carte</option>
+    </select>
+    <button class="primary" id="deckSearch">Chercher les decks</button>
+  </div>
+  <div class="sub" style="margin-top:10px">Couleurs préférées (le deck doit contenir toutes celles cochées) :</div>
+  <div class="row" id="deckColorFilters" style="margin-top:6px">
+    <label><input type="checkbox" name="deckColor" value="Vigilance" /><img class="aspect-icon" src="assets/aspects/vigilance.png" alt="" /> Vigilance</label>
+    <label><input type="checkbox" name="deckColor" value="Command" /><img class="aspect-icon" src="assets/aspects/command.png" alt="" /> Command</label>
+    <label><input type="checkbox" name="deckColor" value="Aggression" /><img class="aspect-icon" src="assets/aspects/aggression.png" alt="" /> Aggression</label>
+    <label><input type="checkbox" name="deckColor" value="Cunning" /><img class="aspect-icon" src="assets/aspects/cunning.png" alt="" /> Cunning</label>
+    <label><input type="checkbox" name="deckColor" value="Heroism" /><img class="aspect-icon" src="assets/aspects/heroism.png" alt="" /> Heroism</label>
+    <label><input type="checkbox" name="deckColor" value="Villainy" /><img class="aspect-icon" src="assets/aspects/villainy.png" alt="" /> Villainy</label>
+  </div>
+  <div class="status" id="deckSearchStatus"></div>
+  <div id="deckResults"></div>
+  <div class="hint">
+    L'import ne fait que fusionner/mettre à jour la base locale (une synchro toutes les 2h maximum).
+    Source des decks : API interne (non documentée) de
+    <a href="https://swudb.com" target="_blank" rel="noopener">swudb.com</a>. Le badge 📊 "winrate" quand
+    présent vient de l'API publique de <a href="https://swustats.net/TCGEngine/Stats/DeckMetaStats.php" target="_blank" rel="noopener">SWU Stats</a>,
+    scopée à la saison <span id="deckStatsSeasonLabel">Ashes of the Empire</span> (format Premier, croisé par leader + base — n'apparaît que pour les archétypes qu'ils suivent déjà).
+  </div>
+</section>

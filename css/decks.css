@@ -1,0 +1,32 @@
+.decklist-wrap{overflow-x:auto;margin-top:6px}
+.decktable{width:100%;border-collapse:collapse;font-size:.85rem;white-space:nowrap}
+.decktable th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+  padding:6px 10px;border-bottom:1px solid var(--border);font-weight:700}
+.decktable td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.decktable tbody tr.deckrow:hover{background:var(--panel2)}
+.decktable .col-deck{white-space:normal;min-width:220px}
+.decktable .deck-name-line a{color:var(--accent2);text-decoration:none;font-weight:600}
+.decktable .deck-name-line a:hover{text-decoration:underline}
+.decktable .deck-leader-line{color:var(--muted);font-size:.8rem;margin-top:2px}
+.decktable .muted{color:var(--muted)}
+.decktable tr.deckrow-matches td{padding-top:0;padding-bottom:10px;white-space:normal}
+.decktable tr.deckrow-matches .badges-wrap{display:flex;flex-wrap:wrap;gap:5px}
+.meta-badge{color:var(--accent);border-color:var(--accent);white-space:nowrap}
+.manacurve{display:flex;align-items:flex-end;gap:3px;height:40px;padding:0 2px}
+.manacurve-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;width:10px}
+.manacurve-bar{width:100%;background:var(--accent2);border-radius:2px 2px 0 0}
+.manacurve-label{font-size:.6rem;color:var(--muted);margin-top:2px}
+.deckgroup{margin-top:16px}
+.deckgroup:first-child{margin-top:0}
+.deckgroup-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.9rem;margin-bottom:8px;
+  padding-bottom:6px;border-bottom:1px solid var(--border)}
+.deckgroup-title .muted{font-weight:400;color:var(--muted);font-size:.8rem}
+#deckColorFilters label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem;
+  background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:5px 12px 5px 8px}
+#deckColorFilters label:has(input:checked){border-color:var(--accent);color:var(--accent)}
+#deckColorFilters input[type=checkbox]{accent-color:var(--accent);margin:0}
+[data-preview-set]{cursor:help; border-bottom:1px dotted var(--muted)}
+#cardPreview{position:fixed;display:none;z-index:1000;width:220px;aspect-ratio:5/7;
+  border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5);
+  border:1px solid var(--border);background:var(--panel2);pointer-events:none}
+#cardPreview img{width:100%;height:100%;object-fit:cover;display:block}
