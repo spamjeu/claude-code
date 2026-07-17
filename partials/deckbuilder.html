@@ -1,0 +1,26 @@
+<section class="panel">
+  <strong>🛠️ Deck Builder — suggestions par affinité</strong>
+  <p class="hint" style="margin-top:6px">
+    Suggestions calculées à partir des decks connus localement (onglet "Base de decks") :
+    quelles cartes reviennent le plus souvent dans les decks qui jouent le leader et/ou les
+    cartes déjà choisies ci-dessous. Pas d'analyse du texte des cartes — uniquement ce que
+    les decks réellement importés jouent ensemble. Plus la base locale est grande, plus les
+    suggestions sont pertinentes : pense à lancer "Importer / mettre à jour" dans l'onglet
+    Base de decks si tu n'as pas encore de données.
+  </p>
+  <div class="row">
+    <select id="dbLeaderSelect">
+      <option value="">Choisis un leader (optionnel)</option>
+    </select>
+    <button id="dbReset">Réinitialiser</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <input id="dbCardQ" type="text" list="dbCardNamesList" placeholder="Ajouter une carte par son nom" />
+    <datalist id="dbCardNamesList"></datalist>
+    <button class="primary" id="dbAddCard">Ajouter</button>
+  </div>
+  <div class="chips" id="dbSelectedCards"></div>
+  <div class="status" id="dbStatus"></div>
+</section>
+
+<section class="grid" id="dbSuggestions"></section>

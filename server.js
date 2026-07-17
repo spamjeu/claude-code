@@ -460,38 +460,49 @@ async function syncOneDeck(decks, summary) {
 // Decks within a page are fetched in small concurrent batches (instead of
 // strictly one at a time) to cut wall-clock time — still paced with a sleep
 // between batches so we don't hammer swudb.com's undocumented API.
+// Two independent passes — "hot" (trending) and "top" (swudb.com/decks/top,
+// all-time most-liked) — merged into the same data/decks.json (deduped by
+// deckId, same as re-running one sort twice). "top" skews toward
+// older/deprecated-set decks but still contributes real card co-occurrence
+// data for the deck-builder suggestions, which is why it's worth the extra
+// calls even though those decks are less relevant for meta stats.
+const SYNC_SORTS = ["hot", "top"];
+
 async function syncDecks({ format, limit }) {
   if (syncInProgress) throw new Error("Un import est déjà en cours.");
   syncInProgress = true;
-  syncProgress = { active: true, imported: 0, total: limit };
+  syncProgress = { active: true, imported: 0, total: limit * SYNC_SORTS.length };
   try {
     const decks = loadDecks();
-    let skip = 0;
     let imported = 0;
-    while (imported < limit) {
-      const searchUrl = `https://swudb.com/api/decks/search?` +
-        `skip=${skip}&sortby=hot` + (format ? `&format=${encodeURIComponent(format)}` : "");
-      const page = await httpsGetJson(searchUrl);
-      const summaries = page.decks || [];
-      if (!summaries.length) break;
+    for (const sortby of SYNC_SORTS) {
+      let skip = 0;
+      let importedThisSort = 0;
+      while (importedThisSort < limit) {
+        const searchUrl = `https://swudb.com/api/decks/search?` +
+          `skip=${skip}&sortby=${sortby}` + (format ? `&format=${encodeURIComponent(format)}` : "");
+        const page = await httpsGetJson(searchUrl);
+        const summaries = page.decks || [];
+        if (!summaries.length) break;
 
-      let i = 0;
-      while (i < summaries.length && imported < limit) {
-        const batch = summaries.slice(i, i + Math.min(SYNC_BATCH_SIZE, limit - imported));
-        i += batch.length;
-        const results = await Promise.allSettled(batch.map((summary) => syncOneDeck(decks, summary)));
-        results.forEach((r, idx) => {
-          if (r.status === "fulfilled") imported++;
-          else console.error(`Skipping deck ${batch[idx].deckId}: ${r.reason.message}`);
-        });
-        syncProgress.imported = imported;
-        saveDecks(decks); // write incrementally so /api/decks/by-card sees growing data mid-sync
+        let i = 0;
+        while (i < summaries.length && importedThisSort < limit) {
+          const batch = summaries.slice(i, i + Math.min(SYNC_BATCH_SIZE, limit - importedThisSort));
+          i += batch.length;
+          const results = await Promise.allSettled(batch.map((summary) => syncOneDeck(decks, summary)));
+          results.forEach((r, idx) => {
+            if (r.status === "fulfilled") { imported++; importedThisSort++; }
+            else console.error(`Skipping deck ${batch[idx].deckId}: ${r.reason.message}`);
+          });
+          syncProgress.imported = imported;
+          saveDecks(decks); // write incrementally so /api/decks/by-card sees growing data mid-sync
+          await sleep(SYNC_DELAY_MS);
+        }
+
+        if (page.endOfResults) break;
+        skip += summaries.length;
         await sleep(SYNC_DELAY_MS);
       }
-
-      if (page.endOfResults) break;
-      skip += summaries.length;
-      await sleep(SYNC_DELAY_MS);
     }
     saveDecks(decks);
     return { imported, total: Object.keys(decks).length };
@@ -575,6 +586,97 @@ function findDecksByCard(query, colors) {
   return results;
 }
 
+// --- Deck builder: co-occurrence-based card suggestions ---
+// No card-text/keyword analysis — suggestions are purely "which cards
+// actually get played alongside this leader and/or these cards, across the
+// decks we know about locally" (data/decks.json, populated by the "hot" +
+// "top" sync above). Cheap, data-driven, and it naturally surfaces synergies
+// like an upgrade-focused leader pulling in "Yellow Aces Bomber" without any
+// hand-authored rule for it — at the cost of being blind to real synergies
+// nobody has played yet, and only as good as the local deck sample size.
+function cardKey(ref) {
+  return `${(ref.name || "").toLowerCase()}|${(ref.title || "").toLowerCase()}`;
+}
+
+function listLeaders() {
+  const decks = loadDecks();
+  const byKey = new Map();
+  for (const deck of Object.values(decks)) {
+    const ref = normalizeRef(deck.leader);
+    if (!ref || !ref.name) continue;
+    const key = cardKey(ref);
+    if (!byKey.has(key)) byKey.set(key, { ...ref, deckCount: 0 });
+    byKey.get(key).deckCount++;
+  }
+  return [...byKey.values()].sort((a, b) => b.deckCount - a.deckCount);
+}
+
+function listCardNames() {
+  const decks = Object.values(loadDecks());
+  const names = new Set();
+  for (const deck of decks) {
+    for (const c of deck.cards || []) if (c.name) names.add(c.name);
+  }
+  return [...names].sort();
+}
+
+// Ranks every maindeck card (other than the ones already selected) by how
+// often it co-occurs, among the locally known decks matching the chosen
+// leader and/or already-selected cards. deckShare = fraction of those
+// matching decks that play the card at least once.
+function suggestCards({ leaderName, leaderTitle, cardNames }) {
+  const decks = Object.values(loadDecks());
+  const wantedCards = (cardNames || []).map((n) => n.trim().toLowerCase()).filter(Boolean);
+  const excluded = new Set(wantedCards);
+
+  const matching = decks.filter((deck) => {
+    if (leaderName) {
+      const ref = normalizeRef(deck.leader);
+      if (!ref || !ref.name || ref.name.toLowerCase() !== leaderName.toLowerCase()) return false;
+      if (leaderTitle && (ref.title || "").toLowerCase() !== leaderTitle.toLowerCase()) return false;
+    }
+    if (wantedCards.length) {
+      const deckCardNames = new Set((deck.cards || []).map((c) => (c.name || "").toLowerCase()));
+      if (!wantedCards.every((n) => deckCardNames.has(n))) return false;
+    }
+    return true;
+  });
+
+  const matchingDecks = matching.length;
+  if (!matchingDecks) return { matchingDecks: 0, suggestions: [] };
+
+  const tally = new Map(); // cardKey -> { ref, deckCount, totalCopies }
+  for (const deck of matching) {
+    const seenInThisDeck = new Set();
+    for (const c of deck.cards || []) {
+      if (!c.name || excluded.has(c.name.toLowerCase())) continue;
+      const key = cardKey(c);
+      if (!tally.has(key)) tally.set(key, { ref: c, deckCount: 0, totalCopies: 0 });
+      const entry = tally.get(key);
+      entry.totalCopies += c.count || 1;
+      if (!seenInThisDeck.has(key)) {
+        entry.deckCount++;
+        seenInThisDeck.add(key);
+      }
+    }
+  }
+
+  const suggestions = [...tally.values()]
+    .map((e) => ({
+      name: e.ref.name,
+      title: e.ref.title || "",
+      set: e.ref.set || "",
+      number: e.ref.number || "",
+      deckCount: e.deckCount,
+      deckShare: e.deckCount / matchingDecks,
+      avgCopies: Math.round((e.totalCopies / e.deckCount) * 10) / 10,
+    }))
+    .sort((a, b) => b.deckShare - a.deckShare || b.deckCount - a.deckCount)
+    .slice(0, 40);
+
+  return { matchingDecks, suggestions };
+}
+
 const server = http.createServer((req, res) => {
   try {
     handleRequest(req, res);
@@ -656,6 +758,27 @@ function handleRequest(req, res) {
     const colors = (url.searchParams.get("colors") || "").split(",").filter(Boolean);
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ decks: findDecksByCard(q, colors) }));
+    return;
+  }
+
+  if (url.pathname === "/api/deckbuilder/leaders") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ leaders: listLeaders() }));
+    return;
+  }
+
+  if (url.pathname === "/api/deckbuilder/cardnames") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ names: listCardNames() }));
+    return;
+  }
+
+  if (url.pathname === "/api/deckbuilder/suggest") {
+    const leaderName = url.searchParams.get("leaderName") || "";
+    const leaderTitle = url.searchParams.get("leaderTitle") || "";
+    const cardNames = (url.searchParams.get("cards") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(suggestCards({ leaderName, leaderTitle, cardNames })));
     return;
   }
 
