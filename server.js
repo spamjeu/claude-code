@@ -20,6 +20,7 @@ const path = require("path");
 const PORT = process.env.PORT || 8787;
 const ROOT = __dirname;
 const DECKS_FILE = path.join(ROOT, "data", "decks.json");
+const STATS_FILE = path.join(ROOT, "data", "stats.json");
 const SYNC_DELAY_MS = 200;
 const META_CACHE_MS = 60 * 60 * 1000;
 const SYNC_COOLDOWN_MS = 2 * 60 * 60 * 1000;
@@ -137,61 +138,78 @@ function computeManaCurve(shuffledDeck) {
   return curve;
 }
 
+// Meta/card stats (swustats.net) are synced independently from the deck
+// import button: they run on their own recurring background timer and
+// persist to data/stats.json, decoupled from data/decks.json's manual
+// sync/cooldown cycle. Requests just read the in-memory cache — no
+// per-request network fetch, no coupling to the "Importer" click.
+let statsCache = { archetypes: [], cards: [], fetchedAt: 0 };
+
+function loadStatsFile() {
+  try { return JSON.parse(fs.readFileSync(STATS_FILE, "utf8")); }
+  catch { return null; }
+}
+
+function saveStatsFile(stats) {
+  fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
+  fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 1));
+}
+
 // Meta presence (leader/base archetype win rate) from swustats.net's public
-// Deck Meta Stats API, scoped to the ASH season via ASH_START_WEEK — cached
-// for an hour since it's a side-panel stat, not something that needs to be
-// live per search. Unlike the previous source (swumetastats.com, which
-// silently ignores season filters and always returns an all-time mix), this
-// API has no metaShare field, only numPlays (raw count) and a
-// string-percentage winRate — see metaBadgeHtml() in index.html for how
-// that's rendered.
+// Deck Meta Stats API, scoped to the ASH season via ASH_START_WEEK. Unlike
+// the previous source (swumetastats.com, which silently ignores season
+// filters and always returns an all-time mix), this API has no metaShare
+// field, only numPlays (raw count) and a string-percentage winRate — see
+// metaBadgeHtml() in js/decks.js for how that's rendered.
 //
 // Deliberately NOT passing consolidate=1: that flag merges every
 // mechanically-equivalent "common" base (same color+type) into a single row
 // under one arbitrary representative base name/image, which breaks the
-// name-based matching in loadMetaArchetypes()/metaFor() (index.html) for any
+// name-based matching in loadMetaArchetypes()/metaFor() (js/decks.js) for any
 // deck whose actual base isn't that representative one — e.g. "Nevarro City,
 // Restored" and "City in the Clouds" both silently disappeared into a
 // "Shield Generator Complex" bucket under consolidate=1, showing no stats
 // for real decks that do have data. consolidate=0 (the default) keeps one
 // row per exact base, matching how local decks are keyed.
-let metaArchetypesCache = { data: null, fetchedAt: 0 };
-
-async function getMetaArchetypes() {
-  const age = Date.now() - metaArchetypesCache.fetchedAt;
-  if (metaArchetypesCache.data && age < META_CACHE_MS) return metaArchetypesCache.data;
-  try {
-    const data = await httpsGetJson(
-      `https://swustats.net/TCGEngine/Stats/DeckMetaStatsAPI.php?startWeek=${ASH_START_WEEK}&format=Premier`
-    );
-    metaArchetypesCache = { data: Array.isArray(data) ? data : [], fetchedAt: Date.now() };
-  } catch (err) {
-    console.error(`Could not load meta archetypes: ${err.message}`);
-    if (!metaArchetypesCache.data) metaArchetypesCache = { data: [], fetchedAt: Date.now() };
-  }
-  return metaArchetypesCache.data;
+async function fetchArchetypesFromSwustats() {
+  const data = await httpsGetJson(
+    `https://swustats.net/TCGEngine/Stats/DeckMetaStatsAPI.php?startWeek=${ASH_START_WEEK}&format=Premier`
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 // Per-card stats (win rate when included/played/resourced) from swustats.net's
-// public Card Meta Stats API, scoped to ASH_START_WEEK (same season constant
-// as getMetaArchetypes(), so both stats sources stay consistent). Cached for
-// an hour, same pattern as metaArchetypesCache.
-let cardStatsCache = { data: null, fetchedAt: 0 };
-
-async function getCardStats() {
-  const age = Date.now() - cardStatsCache.fetchedAt;
-  if (cardStatsCache.data && age < META_CACHE_MS) return cardStatsCache.data;
-  try {
-    const data = await httpsGetJson(
-      `https://swustats.net/TCGEngine/APIs/CardMetaStatsAPI.php?startWeek=${ASH_START_WEEK}`
-    );
-    cardStatsCache = { data: Array.isArray(data) ? data : [], fetchedAt: Date.now() };
-  } catch (err) {
-    console.error(`Could not load card stats: ${err.message}`);
-    if (!cardStatsCache.data) cardStatsCache = { data: [], fetchedAt: Date.now() };
-  }
-  return cardStatsCache.data;
+// public Card Meta Stats API, scoped to the same ASH_START_WEEK season.
+async function fetchCardStatsFromSwustats() {
+  const data = await httpsGetJson(
+    `https://swustats.net/TCGEngine/Stats/CardMetaStatsAPI.php?startWeek=${ASH_START_WEEK}`
+  );
+  return Array.isArray(data) ? data : [];
 }
+
+// The two sources are refreshed independently (allSettled, not all): a
+// failure on one (e.g. swustats.net moving/breaking one endpoint) must not
+// discard a successful result from the other.
+async function refreshStats() {
+  const [archetypesResult, cardsResult] = await Promise.allSettled([
+    fetchArchetypesFromSwustats(),
+    fetchCardStatsFromSwustats(),
+  ]);
+  if (archetypesResult.status === "fulfilled") statsCache.archetypes = archetypesResult.value;
+  else console.error(`Could not refresh meta archetypes: ${archetypesResult.reason.message}`);
+  if (cardsResult.status === "fulfilled") statsCache.cards = cardsResult.value;
+  else console.error(`Could not refresh card stats: ${cardsResult.reason.message}`);
+  statsCache.fetchedAt = Date.now();
+  saveStatsFile(statsCache);
+}
+
+// Warm the cache from disk so a restart still serves last-known stats
+// immediately, then kick off a background refresh right away and on a
+// recurring timer (META_CACHE_MS) — fully async, independent of any request.
+const persistedStats = loadStatsFile();
+if (persistedStats) statsCache = persistedStats;
+refreshStats();
+setInterval(refreshStats, META_CACHE_MS);
 
 const SYNC_BATCH_SIZE = 5;
 let syncProgress = { active: false, imported: 0, total: 0 };
@@ -407,28 +425,14 @@ function handleRequest(req, res) {
   }
 
   if (url.pathname === "/api/meta/archetypes") {
-    getMetaArchetypes()
-      .then((archetypes) => {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ archetypes, seasonStart: ASH_SEASON_START_ISO }));
-      })
-      .catch((err) => {
-        res.writeHead(502, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
-      });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ archetypes: statsCache.archetypes, seasonStart: ASH_SEASON_START_ISO }));
     return;
   }
 
   if (url.pathname === "/api/cards/stats") {
-    getCardStats()
-      .then((cards) => {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ cards, seasonStart: ASH_SEASON_START_ISO }));
-      })
-      .catch((err) => {
-        res.writeHead(502, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
-      });
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ cards: statsCache.cards, seasonStart: ASH_SEASON_START_ISO }));
     return;
   }
 

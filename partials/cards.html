@@ -24,6 +24,7 @@
   </div>
   <div class="row" style="margin-top:10px">
     <input type="hidden" id="aspect" value="" />
+    <input type="hidden" id="arena" value="" />
     <div id="aspectPicker">
       <button type="button" class="selected" data-value="">Tous les aspects</button>
       <button type="button" data-value="vigilance"><img class="aspect-icon-sm" src="assets/aspects/vigilance.png" alt="" /> Vigilance</button>
@@ -35,10 +36,11 @@
     </div>
   </div>
   <div class="chips">
-    <button class="chip" data-preset="advantage-ash">🃏 Cartes "Advantage" (ASH)</button>
-    <button class="chip" data-preset="advantage-any">🌐 "Advantage" tous sets</button>
-    <button class="chip" data-preset="upgrades-ash">⬆️ Toutes les Upgrades ASH</button>
-    <button class="chip" data-preset="grant-token">🎯 "gain" + "advantage"</button>
+    <button class="chip" data-preset="leader">👑 Leader</button>
+    <button class="chip" data-preset="ground">🛡️ Terrestre</button>
+    <button class="chip" data-preset="space">🚀 Volante</button>
+    <button class="chip" data-preset="upgrade">⬆️ Upgrade</button>
+    <button class="chip" data-preset="event">⚡ Event</button>
   </div>
   <div class="hint">
     Syntaxe libre supportée (transmise telle quelle à l'API si tu préfixes ta recherche par <code>raw:</code>) :

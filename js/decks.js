@@ -268,6 +268,7 @@ window.SWU_TABS.decks = function initDecksTab(){
 
   deckSyncBtn.addEventListener("click", async () => {
     deckSyncBtn.disabled = true;
+    deckSyncBtn.classList.add("loading");
     deckSyncStatus.className = "status";
     deckSyncStatus.textContent = "Import en cours…";
     const progressTimer = setInterval(async () => {
@@ -290,6 +291,7 @@ window.SWU_TABS.decks = function initDecksTab(){
       deckSyncStatus.textContent = `Erreur d'import : ${err.message}`;
     } finally {
       clearInterval(progressTimer);
+      deckSyncBtn.classList.remove("loading");
       refreshDeckDbStatus();
     }
   });

@@ -20,6 +20,8 @@ function buildQuery(){
   if (type) parts.push(`ty:${type}`);
   const aspect = $("#aspect").value;
   if (aspect) parts.push(`a:${aspect}`);
+  const arena = $("#arena").value;
+  if (arena) parts.push(`ar:${arena}`);
   return parts.join(" AND ");
 }
 
@@ -30,11 +32,15 @@ function setAspect(value){
   });
 }
 
+// Filtres rapides par type/arène. Le Set choisi (ASH par défaut) n'est pas
+// touché : ces boutons filtrent dans le contexte déjà sélectionné plutôt que
+// de le réinitialiser.
 const PRESETS = {
-  "advantage-ash": () => { $("#q").value = "advantage"; $("#set").value = "ash"; $("#type").value=""; setAspect(""); },
-  "advantage-any": () => { $("#q").value = "advantage"; $("#set").value = ""; $("#type").value=""; setAspect(""); },
-  "upgrades-ash": () => { $("#q").value = ""; $("#set").value = "ash"; $("#type").value="upgrade"; setAspect(""); },
-  "grant-token": () => { $("#q").value = 'raw:(t:"gain" AND t:"advantage")'; $("#set").value=""; $("#type").value=""; setAspect(""); },
+  "leader": () => { $("#q").value = ""; $("#type").value = "leader"; $("#arena").value = ""; setAspect(""); },
+  "ground": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "ground"; setAspect(""); },
+  "space": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "space"; setAspect(""); },
+  "upgrade": () => { $("#q").value = ""; $("#type").value = "upgrade"; $("#arena").value = ""; setAspect(""); },
+  "event": () => { $("#q").value = ""; $("#type").value = "event"; $("#arena").value = ""; setAspect(""); },
 };
 
 function pick(obj, patterns){

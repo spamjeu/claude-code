@@ -1,3 +1,10 @@
+#deckSync.loading{position:relative;color:transparent;pointer-events:none}
+#deckSync.loading::after{
+  content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
+  border:2px solid rgba(255,255,255,.3);border-top-color:var(--accent);border-radius:50%;
+  animation:deck-sync-spin .7s linear infinite;
+}
+@keyframes deck-sync-spin{ to{ transform:rotate(360deg); } }
 .decklist-wrap{overflow-x:auto;margin-top:6px}
 .decktable{width:100%;border-collapse:collapse;font-size:.85rem;white-space:nowrap}
 .decktable th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
