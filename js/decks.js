@@ -1,7 +1,7 @@
 // Onglet "Base de decks". Ce fichier ne touche qu'à cet onglet (+ l'overlay
 // #cardPreview, qui vit dans le shell index.html mais n'est utilisé que par
 // les survols de cartes de cette base de decks).
-let deckSyncBtn, deckSyncStatus, deckCardQ, deckSearchBtn, deckSearchStatus,
+let deckSyncBtn, deckClearBtn, deckSyncStatus, deckCardQ, deckSearchBtn, deckSearchStatus,
   deckResultsEl, deckSortSel, deckGroupSel, deckDbStatusEl;
 let lastDeckResults = [];
 
@@ -88,8 +88,12 @@ function colorDots(colors){
   return colors.map((c) => `<img class="aspect-icon-sm" src="assets/aspects/${c.toLowerCase()}.png" alt="${c}" title="${c}" />`).join("");
 }
 
-function previewAttrs(set, number){
-  return set && number ? `data-preview-set="${set}" data-preview-number="${number}"` : "";
+// Leaders and bases are landscape cards (unlike units/upgrades/events, which
+// are portrait) — flagged here so the hover preview can resize itself
+// instead of squashing/cropping a landscape image into a portrait box.
+function previewAttrs(set, number, landscape){
+  if (!set || !number) return "";
+  return `data-preview-set="${set}" data-preview-number="${number}"${landscape ? ' data-preview-landscape="1"' : ""}`;
 }
 
 function manaCurveHtml(curve){
@@ -115,12 +119,21 @@ function metaBadgeHtml(d){
   return `<span class="badge meta-badge" title="Données swustats.net, saison Ashes of the Empire ${window.SWU.seasonPeriodLabel()}, format Premier">📊 ${winRate}% winrate (${plays} parties, ASH)</span>`;
 }
 
+function priceHtml(d){
+  if (!d.price) return `<span class="muted">—</span>`;
+  const euros = (d.price.cents / 100).toFixed(2).replace(".", ",");
+  const prefix = d.price.complete ? "" : "~";
+  const title = "Estimation CardTrader : annonce la moins chère par carte (non-foil, non signée/altérée, état Near Mint ou Slightly Played), hors frais de port." +
+    (d.price.complete ? "" : " Incomplet : au moins une carte du deck n'a pas d'annonce correspondante.");
+  return `<span title="${title}">${prefix}${euros} €</span>`;
+}
+
 function deckRowHtml(d){
   const matchesRow = d.matches.length ? `
     <tr class="deckrow-matches">
       <td colspan="6">
         <div class="badges-wrap">
-          ${d.matches.map((m) => `<span class="badge" ${previewAttrs(m.set, m.number)}>${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
+          ${d.matches.map((m) => `<span class="badge" ${previewAttrs(m.set, m.number, m.role !== "Deck")}>${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
         </div>
       </td>
     </tr>` : "";
@@ -130,11 +143,11 @@ function deckRowHtml(d){
       <td class="col-aspects">${colorDots(d.colors)}</td>
       <td class="col-deck">
         <div class="deck-name-line"><a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a> <span class="muted">par ${d.authorName}</span></div>
-        <div class="deck-leader-line"><span ${previewAttrs(d.leaderSet, d.leaderNumber)}>${d.leaderName || "?"}</span>${d.baseName ? ` / <span ${previewAttrs(d.baseSet, d.baseNumber)}>${d.baseName}</span>` : ""}</div>
+        <div class="deck-leader-line"><span ${previewAttrs(d.leaderSet, d.leaderNumber, true)}>${d.leaderName || "?"}</span>${d.baseName ? ` / <span ${previewAttrs(d.baseSet, d.baseNumber, true)}>${d.baseName}</span>` : ""}</div>
       </td>
       <td class="col-curve">${manaCurveHtml(d.manaCurve)}</td>
       <td class="col-winrate">${metaBadgeHtml(d) || `<span class="muted">—</span>`}</td>
-      <td class="col-price"><span class="muted">—</span></td>
+      <td class="col-price">${priceHtml(d)}</td>
     </tr>
     ${matchesRow}
   `;
@@ -244,6 +257,7 @@ function wireCardPreview(){
     const set = el.dataset.previewSet.toUpperCase();
     const number = el.dataset.previewNumber;
     cardPreviewImg.src = `https://cdn.swu-db.com/images/cards/${set}/${number}.png`;
+    cardPreviewEl.classList.toggle("landscape", !!el.dataset.previewLandscape);
     cardPreviewEl.style.display = "block";
     positionCardPreview(e);
   });
@@ -257,6 +271,7 @@ function wireCardPreview(){
 
 window.SWU_TABS.decks = function initDecksTab(){
   deckSyncBtn = $("#deckSync");
+  deckClearBtn = $("#deckClear");
   deckSyncStatus = $("#deckSyncStatus");
   deckCardQ = $("#deckCardQ");
   deckSearchBtn = $("#deckSearch");
@@ -293,6 +308,27 @@ window.SWU_TABS.decks = function initDecksTab(){
       clearInterval(progressTimer);
       deckSyncBtn.classList.remove("loading");
       refreshDeckDbStatus();
+    }
+  });
+
+  deckClearBtn.addEventListener("click", async () => {
+    if (!confirm("Vider toute la base de decks locale ? Cette action est irréversible.")) return;
+    deckClearBtn.disabled = true;
+    deckSyncStatus.className = "status";
+    deckSyncStatus.textContent = "Suppression…";
+    try {
+      const res = await fetch("/api/decks", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      deckSyncStatus.textContent = "Base de decks locale vidée.";
+      deckResultsEl.innerHTML = "";
+      deckSearchStatus.textContent = "";
+      refreshDeckDbStatus();
+    } catch (err) {
+      deckSyncStatus.className = "status err";
+      deckSyncStatus.textContent = `Erreur : ${err.message}`;
+    } finally {
+      deckClearBtn.disabled = false;
     }
   });
 

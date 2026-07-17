@@ -17,13 +17,48 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
+// Minimal .env loader (no dependency): sets process.env from KEY=VALUE lines
+// in an untracked .env file at the repo root. Used for CARDTRADER_TOKEN,
+// which must never be committed — see .gitignore.
+function loadDotEnv() {
+  let content;
+  try { content = fs.readFileSync(path.join(__dirname, ".env"), "utf8"); }
+  catch { return; }
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!(key in process.env)) process.env[key] = trimmed.slice(eq + 1).trim();
+  }
+}
+loadDotEnv();
+
 const PORT = process.env.PORT || 8787;
 const ROOT = __dirname;
 const DECKS_FILE = path.join(ROOT, "data", "decks.json");
 const STATS_FILE = path.join(ROOT, "data", "stats.json");
+const CATALOG_FILE = path.join(ROOT, "data", "cardtrader-catalog.json");
+const PRICES_FILE = path.join(ROOT, "data", "prices.json");
 const SYNC_DELAY_MS = 200;
 const META_CACHE_MS = 60 * 60 * 1000;
 const SYNC_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+// CardTrader (cardtrader.com) is used for deck price estimates: EU
+// marketplace, EUR prices, free-account Bearer token (unlike Cardmarket,
+// which blocks server-side access behind Cloudflare and gates its real API
+// behind a professional-seller developer program). Game 20 = Star Wars
+// Unlimited, category 232 = "Star Wars Singles" (excludes sealed product).
+// Only the 8 mainline sets are indexed — CardTrader also lists variant/promo
+// expansions (xash, ashp, starwars, ...) that our deck data never references,
+// since swudb.com always reports a card's primary set.
+const CARDTRADER_GAME_ID = 20;
+const CARDTRADER_SINGLES_CATEGORY_ID = 232;
+const CARDTRADER_SET_CODES = ["sor", "shd", "twi", "jtl", "lof", "sec", "law", "ash"];
+const CARDTRADER_DELAY_MS = 150;
+const CATALOG_REFRESH_MS = 24 * 60 * 60 * 1000; // the card catalog itself is near-static
+const PRICE_REFRESH_MS = 2 * 60 * 60 * 1000; // live prices move; same cadence as deck sync
 
 // swustats.net buckets stats into 7-day "weeks" numbered from an undocumented
 // anchor (Wk 0 = 2025-09-20, per a hardcoded `currentWeek` constant found in
@@ -52,9 +87,9 @@ function syncCooldownRemaining() {
   }
 }
 
-function httpsGetJson(url) {
+function httpsGetJson(url, headers) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "user-agent": "Mozilla/5.0" } }, (res) => {
+    https.get(url, { headers: { "user-agent": "Mozilla/5.0", ...headers } }, (res) => {
       let body = "";
       res.on("data", (chunk) => (body += chunk));
       res.on("end", () => {
@@ -62,6 +97,12 @@ function httpsGetJson(url) {
         catch (err) { reject(new Error(`Invalid JSON from ${url}: ${err.message}`)); }
       });
     }).on("error", reject);
+  });
+}
+
+function cardTraderGetJson(pathAndQuery) {
+  return httpsGetJson(`https://api.cardtrader.com/api/v2${pathAndQuery}`, {
+    authorization: `Bearer ${process.env.CARDTRADER_TOKEN}`,
   });
 }
 
@@ -211,6 +252,179 @@ if (persistedStats) statsCache = persistedStats;
 refreshStats();
 setInterval(refreshStats, META_CACHE_MS);
 
+// Deck price estimates (CardTrader). Two layers, both persisted so a restart
+// doesn't refetch from scratch:
+//  - cardTraderCatalog: set+number -> blueprint_id, near-static, rebuilt from
+//    /expansions + /blueprints/export.
+//  - priceIndex: set+number -> cheapest matching listing, refreshed more
+//    often since actual prices move. Only cards actually used by a locally
+//    synced deck are priced (not the whole SWU catalog), keeping the number
+//    of /marketplace/products calls bounded by what's needed.
+let cardTraderCatalog = { bySetNumber: {}, fetchedAt: 0 };
+let priceIndex = { bySetNumber: {}, fetchedAt: 0 };
+
+function loadCatalogFile() {
+  try { return JSON.parse(fs.readFileSync(CATALOG_FILE, "utf8")); }
+  catch { return null; }
+}
+function saveCatalogFile(catalog) {
+  fs.mkdirSync(path.dirname(CATALOG_FILE), { recursive: true });
+  fs.writeFileSync(CATALOG_FILE, JSON.stringify(catalog, null, 1));
+}
+function loadPricesFile() {
+  try { return JSON.parse(fs.readFileSync(PRICES_FILE, "utf8")); }
+  catch { return null; }
+}
+function savePricesFile(prices) {
+  fs.mkdirSync(path.dirname(PRICES_FILE), { recursive: true });
+  fs.writeFileSync(PRICES_FILE, JSON.stringify(prices, null, 1));
+}
+
+// CardTrader is inconsistent about wrapping list responses: /games returns
+// {array: [...]}, but /expansions, /categories and /blueprints/export return
+// a bare JSON array. Handle both rather than assuming one shape.
+function asArray(data) {
+  if (Array.isArray(data)) return data;
+  return (data && data.array) || [];
+}
+
+async function buildCardTraderCatalog() {
+  const expansions = asArray(await cardTraderGetJson("/expansions"));
+  const bySetNumber = {};
+  for (const code of CARDTRADER_SET_CODES) {
+    const expansion = expansions.find((e) => e.game_id === CARDTRADER_GAME_ID && e.code === code);
+    if (!expansion) continue; // CardTrader hasn't listed this set yet (e.g. brand new)
+    const blueprints = asArray(await cardTraderGetJson(`/blueprints/export?expansion_id=${expansion.id}`));
+    for (const bp of blueprints) {
+      if (bp.category_id !== CARDTRADER_SINGLES_CATEGORY_ID) continue; // skip sealed product
+      const number = bp.fixed_properties && bp.fixed_properties.collector_number;
+      if (!number) continue;
+      bySetNumber[`${code}/${number}`] = { blueprintId: bp.id, name: bp.name };
+    }
+    await sleep(CARDTRADER_DELAY_MS);
+  }
+  cardTraderCatalog = { bySetNumber, fetchedAt: Date.now() };
+  saveCatalogFile(cardTraderCatalog);
+  return cardTraderCatalog;
+}
+
+async function getCardTraderCatalog() {
+  const age = Date.now() - cardTraderCatalog.fetchedAt;
+  if (cardTraderCatalog.fetchedAt && age < CATALOG_REFRESH_MS) return cardTraderCatalog;
+  return buildCardTraderCatalog();
+}
+
+// Only the cheapest listing matching a "would actually buy this" profile
+// counts: non-foil, not signed/altered, and in playable condition. Cheapest
+// raw listing regardless of condition/language would understate the price
+// with e.g. a heavily-played foreign copy nobody would build a deck out of.
+const PRICE_ELIGIBLE_CONDITIONS = new Set(["Near Mint", "Slightly Played"]);
+
+function pickCheapestEligibleCents(listings) {
+  let best = null;
+  for (const listing of listings || []) {
+    const props = listing.properties_hash || {};
+    if (props.starwars_foil || props.signed || props.altered) continue;
+    if (!PRICE_ELIGIBLE_CONDITIONS.has(props.condition)) continue;
+    if (listing.price_currency !== "EUR") continue;
+    if (best === null || listing.price_cents < best) best = listing.price_cents;
+  }
+  return best;
+}
+
+async function fetchCardPriceCents(blueprintId) {
+  const data = await cardTraderGetJson(`/marketplace/products?blueprint_id=${blueprintId}`);
+  return pickCheapestEligibleCents(data[String(blueprintId)]);
+}
+
+// Every set+number actually played by at least one locally synced deck
+// (leader, second leader, base, maindeck) — bounds price lookups to what's
+// needed instead of pricing CardTrader's entire SWU catalog.
+function collectUniqueCardRefs(decks) {
+  const refs = new Map();
+  const add = (ref) => {
+    if (!ref || !ref.set || !ref.number) return;
+    const key = `${ref.set.toLowerCase()}/${ref.number}`;
+    if (!refs.has(key)) refs.set(key, ref);
+  };
+  for (const deck of Object.values(decks)) {
+    add(normalizeRef(deck.leader));
+    add(normalizeRef(deck.secondLeader));
+    add(normalizeRef(deck.base));
+    for (const c of deck.cards || []) add(c);
+  }
+  return refs;
+}
+
+async function refreshPrices() {
+  if (!process.env.CARDTRADER_TOKEN) return;
+  try {
+    const catalog = await getCardTraderCatalog();
+    const refs = collectUniqueCardRefs(loadDecks());
+    const bySetNumber = { ...priceIndex.bySetNumber };
+    for (const [key, ref] of refs) {
+      const entry = catalog.bySetNumber[key];
+      if (!entry) { bySetNumber[key] = null; continue; } // not in CardTrader's catalog
+      try {
+        const cents = await fetchCardPriceCents(entry.blueprintId);
+        bySetNumber[key] = cents === null ? null : { cents, currency: "EUR" };
+      } catch (err) {
+        console.error(`Could not fetch price for ${key}: ${err.message}`);
+      }
+      await sleep(CARDTRADER_DELAY_MS);
+    }
+    priceIndex = { bySetNumber, fetchedAt: Date.now() };
+    savePricesFile(priceIndex);
+  } catch (err) {
+    console.error(`Background price refresh failed: ${err.message}`);
+  }
+}
+
+function priceForRef(ref) {
+  if (!ref || !ref.set || !ref.number) return null;
+  return priceIndex.bySetNumber[`${ref.set.toLowerCase()}/${ref.number}`] || null;
+}
+
+// Sums the cheapest-eligible price across leader+secondLeader+base+maindeck
+// (weighted by copy count). `complete` is false if any card in the deck had
+// no matching price, so the UI can flag the total as a lower-bound estimate
+// rather than presenting it as exact.
+function computeDeckPrice(deck) {
+  const parts = [
+    { ref: normalizeRef(deck.leader), count: 1 },
+    { ref: normalizeRef(deck.secondLeader), count: 1 },
+    { ref: normalizeRef(deck.base), count: 1 },
+    ...(deck.cards || []).map((c) => ({ ref: c, count: c.count || 1 })),
+  ].filter((p) => p.ref);
+  if (!parts.length) return null;
+  let totalCents = 0;
+  let complete = true;
+  let pricedCount = 0;
+  for (const { ref, count } of parts) {
+    const price = priceForRef(ref);
+    if (price) {
+      totalCents += price.cents * count;
+      pricedCount++;
+    } else {
+      complete = false;
+    }
+  }
+  if (!pricedCount) return null;
+  return { cents: totalCents, currency: "EUR", complete };
+}
+
+const persistedCatalog = loadCatalogFile();
+if (persistedCatalog) cardTraderCatalog = persistedCatalog;
+const persistedPrices = loadPricesFile();
+if (persistedPrices) priceIndex = persistedPrices;
+
+if (process.env.CARDTRADER_TOKEN) {
+  refreshPrices();
+  setInterval(refreshPrices, PRICE_REFRESH_MS);
+} else {
+  console.log('CARDTRADER_TOKEN not set in .env — deck price estimates disabled.');
+}
+
 const SYNC_BATCH_SIZE = 5;
 let syncProgress = { active: false, imported: 0, total: 0 };
 
@@ -331,6 +545,7 @@ function toResult(deck, matches) {
     baseNumber: baseRef && baseRef.number,
     colors: deck.colors || [],
     manaCurve: deck.manaCurve || null,
+    price: computeDeckPrice(deck),
     matches,
   };
 }

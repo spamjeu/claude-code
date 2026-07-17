@@ -36,4 +36,5 @@
 #cardPreview{position:fixed;display:none;z-index:1000;width:220px;aspect-ratio:5/7;
   border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5);
   border:1px solid var(--border);background:var(--panel2);pointer-events:none}
+#cardPreview.landscape{width:308px;aspect-ratio:7/5}
 #cardPreview img{width:100%;height:100%;object-fit:cover;display:block}
