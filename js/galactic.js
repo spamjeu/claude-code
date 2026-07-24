@@ -49,13 +49,16 @@ window.SWU_TABS.galactic = function initGalactic() {
       }
       if (matches && matches.length) {
         const rows = matches.map((m) => {
-          const opponents = (m.opponents || []).map(esc).join(", ") || "?";
+          const opponents = (m.opponents || []).map((o) => {
+            const rankBadge = o.rank != null ? ` <span class="badge">#${esc(o.rank)}</span>` : "";
+            return `<strong>${esc(o.name)}</strong>${rankBadge}`;
+          }).join(", ") || "?";
           const opponentDeck = decklistLinksHtml(m.opponentDecklists);
           const score = esc(m.score || m.result || "en cours");
           return `
             <div class="gal-match-row gal-outcome-${esc(m.outcome || "pending")}">
               <span class="gal-match-round">${esc(m.roundName)}</span>
-              <span class="gal-match-vs">VS <strong>${opponents}</strong>${opponentDeck ? ` ${opponentDeck}` : ""}</span>
+              <span class="gal-match-vs">VS ${opponents}${opponentDeck ? ` ${opponentDeck}` : ""}</span>
               <span class="gal-match-score">${score}</span>
             </div>`;
         }).join("");

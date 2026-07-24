@@ -232,6 +232,22 @@ function decklistLinks(decklists) {
     .map((d) => ({ id: d.DecklistId, name: d.DecklistName || "Decklist" }));
 }
 
+// Builds a username -> rank lookup from a standings snapshot so match rows
+// can show "how good is this opponent" without a separate request per
+// opponent. Only as fresh as the last completed round's standings (matches
+// in progress are paired before that round's standings exist), which is the
+// same snapshot already used for the tracked player's own classement block.
+function standingsRankIndex(rows) {
+  const index = {};
+  for (const row of rows) {
+    for (const player of (row.Team && row.Team.Players) || []) {
+      const key = (player.Username || player.DisplayName || "").toLowerCase();
+      if (key) index[key] = row.Rank;
+    }
+  }
+  return index;
+}
+
 function findTrackedInStandings(rows) {
   const found = {};
   for (const row of rows) {
@@ -259,7 +275,7 @@ function findTrackedInStandings(rows) {
 // live against an in-progress round) — each Competitor also carries its own
 // Decklists, which is where an opponent's public decklist (when the event
 // collects them) shows up.
-function findTrackedInMatches(rows) {
+function findTrackedInMatches(rows, rankIndex) {
   const found = {};
   for (const row of rows) {
     const competitors = row.Competitors || [];
@@ -270,7 +286,10 @@ function findTrackedInMatches(rows) {
           if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
             const opponentCompetitors = competitors.filter((c) => c !== competitor);
             const opponents = opponentCompetitors
-              .flatMap((c) => ((c.Team && c.Team.Players) || []).map((p) => p.DisplayName || p.Username));
+              .flatMap((c) => ((c.Team && c.Team.Players) || []).map((p) => ({
+                name: p.DisplayName || p.Username,
+                rank: (rankIndex && rankIndex[(p.Username || p.DisplayName || "").toLowerCase()]) ?? null,
+              })));
             const opponentDecklists = opponentCompetitors.flatMap((c) => decklistLinks(c.Decklists));
             const { score, outcome } = parseResult(row.ResultString, player.Username, player.DisplayName);
             found[tracked] = {
@@ -333,9 +352,11 @@ async function pollGalacticOnce() {
         await sleep(MELEE_REQUEST_DELAY_MS);
 
         const standingRound = lastFlagged(standingsRounds);
+        let opponentRankIndex = {};
         if (standingRound) {
           const rows = await meleeGetRoundStandings(standingRound.id);
           await sleep(MELEE_REQUEST_DELAY_MS);
+          opponentRankIndex = standingsRankIndex(rows);
           const found = findTrackedInStandings(rows);
           for (const [name, info] of Object.entries(found)) {
             entry.players[name] = { ...(entry.players[name] || {}), standing: info };
@@ -350,7 +371,7 @@ async function pollGalacticOnce() {
         for (const round of startedPairingRounds) {
           const rows = await meleeGetRoundMatches(round.id);
           await sleep(MELEE_REQUEST_DELAY_MS);
-          const found = findTrackedInMatches(rows);
+          const found = findTrackedInMatches(rows, opponentRankIndex);
           for (const [name, info] of Object.entries(found)) {
             (matchesByPlayer[name] = matchesByPlayer[name] || []).push({ roundName: round.name, ...info });
           }
