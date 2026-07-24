@@ -30,19 +30,19 @@
 
 <main>
   <div class="tabs">
-    <button class="tab active" data-tab="cards">🔎 Recherche de cartes</button>
+    <button class="tab active" data-tab="galactic">🏆 Galactic</button>
+    <button class="tab" data-tab="cards">🔎 Recherche de cartes</button>
     <button class="tab" data-tab="decks">🗂️ Base de decks</button>
     <button class="tab" data-tab="deckbuilder">🛠️ Deck Builder</button>
-    <button class="tab" data-tab="galactic">🏆 Galactic</button>
   </div>
 
   <!-- Le contenu de chaque onglet vit dans son propre fichier (partials/<tab>.html,
        js/<tab>.js) et est injecté ici au chargement par js/common.js, pour que
        modifier un onglet ne touche qu'à ses fichiers à lui. -->
-  <section class="tabpanel" data-tabpanel="cards"></section>
+  <section class="tabpanel" data-tabpanel="galactic"></section>
+  <section class="tabpanel" data-tabpanel="cards" hidden></section>
   <section class="tabpanel" data-tabpanel="decks" hidden></section>
   <section class="tabpanel" data-tabpanel="deckbuilder" hidden></section>
-  <section class="tabpanel" data-tabpanel="galactic" hidden></section>
 </main>
 
 <footer>
