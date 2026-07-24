@@ -2,7 +2,20 @@
 .gal-player-card strong{font-size:1rem}
 .gal-tournament-block{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:.88rem}
 .gal-tournament-block .badge{margin-bottom:6px}
+.gal-round-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.gal-pairing{margin-top:8px}
+.gal-pairing .badge{margin-left:4px}
+.gal-standing{margin-top:10px}
+.gal-stats{display:flex;gap:8px}
+.gal-stat{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+  padding:8px 6px;text-align:center}
+.gal-stat-value{font-weight:700;font-size:.95rem;color:var(--accent);white-space:nowrap}
+.gal-stat-label{color:var(--muted);font-size:.65rem;text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
 
 @media (max-width:760px){
   .gal-grid{grid-template-columns:1fr}
+}
+@media (max-width:420px){
+  .gal-stats{flex-wrap:wrap}
+  .gal-stat{flex:1 1 40%}
 }

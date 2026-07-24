@@ -28,10 +28,23 @@ window.SWU_TABS.galactic = function initGalactic() {
       const parts = [];
       if (pairing) {
         const opponents = (pairing.opponents || []).map(esc).join(", ") || "?";
-        parts.push(`<div>Round en cours : <strong>${esc(pairing.roundName)}</strong> — Table ${esc(pairing.table ?? "?")} vs ${opponents} (${esc(pairing.result || "en cours")})</div>`);
+        parts.push(`
+          <div class="gal-pairing">
+            <div class="gal-round-label">${esc(pairing.roundName)} · Table ${esc(pairing.table ?? "?")}</div>
+            <div>vs <strong>${opponents}</strong> <span class="badge">${esc(pairing.result || "en cours")}</span></div>
+          </div>`);
       }
       if (standing) {
-        parts.push(`<div>Classement (${esc(standing.roundName)}) : <strong>#${esc(standing.rank)}</strong> — ${esc(standing.matchRecord)} (parties ${esc(standing.gameRecord)}) — ${esc(standing.points)} pts</div>`);
+        parts.push(`
+          <div class="gal-standing">
+            <div class="gal-round-label">Classement — ${esc(standing.roundName)}</div>
+            <div class="gal-stats">
+              <div class="gal-stat"><div class="gal-stat-value">#${esc(standing.rank)}</div><div class="gal-stat-label">Rang</div></div>
+              <div class="gal-stat"><div class="gal-stat-value">${esc(standing.matchRecord)}</div><div class="gal-stat-label">Matchs</div></div>
+              <div class="gal-stat"><div class="gal-stat-value">${esc(standing.gameRecord)}</div><div class="gal-stat-label">Parties</div></div>
+              <div class="gal-stat"><div class="gal-stat-value">${esc(standing.points)}</div><div class="gal-stat-label">Points</div></div>
+            </div>
+          </div>`);
       }
       return `<div class="gal-tournament-block"><div class="badge">${esc(tournamentLabel)}</div>${parts.join("")}</div>`;
     }).join("");
