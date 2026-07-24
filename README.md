@@ -89,10 +89,9 @@ melee.gg (24–26/07/2026) : classement, round en cours, adversaire, table.
 - Les résultats sont mis en cache dans `data/galactic.json` (créé
   automatiquement, ignoré par git). Le bouton "Forcer une actualisation"
   déclenche un cycle immédiat plutôt que d'attendre les 5 minutes.
-- Le troisième pseudo (préfixe `Malet`) n'était pas certain au moment
-  d'écrire ceci ("Malette" ou "Malete") — le matching est fait par
-  sous-chaîne insensible à la casse pour couvrir les deux orthographes ; à
-  ajuster dans `MELEE_TRACKED_PLAYERS` si besoin.
+- Pseudos suivis : `Fred57155`, `Pecoraban`, `Malette` — à ajuster dans
+  `MELEE_TRACKED_PLAYERS` si besoin (matching en sous-chaîne insensible à
+  la casse sur le username et le nom affiché).
 
 ## Données
 

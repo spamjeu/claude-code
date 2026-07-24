@@ -63,10 +63,7 @@ const MELEE_TOURNAMENTS = [
   { id: 404187, label: "Galactic Open Eternal (Red)" },
   { id: 412104, label: "Galactic Open Eternal (Blue)" },
 ];
-// The third player's exact spelling wasn't certain ("Malette" vs "Malete")
-// at the time this was written — matched as a case-insensitive substring
-// against both username and display name so either spelling still hits.
-const MELEE_TRACKED_PLAYERS = ["Fred57155", "Pecoraban", "Malet"];
+const MELEE_TRACKED_PLAYERS = ["Fred57155", "Pecoraban", "Malette"];
 const GALACTIC_FILE = path.join(ROOT, "data", "galactic.json");
 const GALACTIC_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const MELEE_REQUEST_DELAY_MS = 1500;
