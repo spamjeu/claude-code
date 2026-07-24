@@ -166,27 +166,59 @@ async function meleeGetTournamentRounds(tournamentId) {
   };
 }
 
-async function meleeGetRoundStandings(roundId, length) {
-  const fields = dataTablesEnvelope({
-    length: String(length),
+// melee.gg's DataTables endpoints silently cap each response at 500 rows no
+// matter what "length" is requested — a large tournament (e.g. 1486 players,
+// 743 matches in round 1) needs multiple pages via "start", or anything
+// sorted past row 500 (by table number / rank) is just missing from the
+// result with no error. Page until recordsTotal is exhausted.
+async function meleePostFormPaginated(pathName, baseFields) {
+  const pageSize = 500;
+  let start = 0;
+  let all = [];
+  for (;;) {
+    const fields = dataTablesEnvelope({ ...baseFields, start: String(start), length: String(pageSize) });
+    const data = await meleePostForm(pathName, fields);
+    const rows = data.data || [];
+    all = all.concat(rows);
+    start += rows.length;
+    if (!rows.length || start >= (data.recordsTotal || 0)) break;
+    await sleep(MELEE_REQUEST_DELAY_MS);
+  }
+  return all;
+}
+
+async function meleeGetRoundStandings(roundId) {
+  return meleePostFormPaginated(`/Standing/GetRoundStandings/${roundId}`, {
     roundId: String(roundId),
     ...dataTablesColumnFields(["Rank", "Player", "Decklists", "MatchRecord", "GameRecord", "Points", "OpponentCount"]),
   });
-  const data = await meleePostForm(`/Standing/GetRoundStandings/${roundId}`, fields);
-  return data.data || [];
 }
 
-async function meleeGetRoundMatches(roundId, length) {
-  const fields = dataTablesEnvelope({
-    length: String(length),
+async function meleeGetRoundMatches(roundId) {
+  return meleePostFormPaginated(`/Match/GetRoundMatches/${roundId}`, {
     ...dataTablesColumnFields(["TableNumber", "PodNumber", "Competitors", "Decklists", "ResultString"]),
   });
-  const data = await meleePostForm(`/Match/GetRoundMatches/${roundId}`, fields);
-  return data.data || [];
 }
 
 function matchesTrackedPlayer(needle, username, displayName) {
   return (username || "").toLowerCase().includes(needle) || (displayName || "").toLowerCase().includes(needle);
+}
+
+// ResultString reads like "Pecoraban won 2-0-0", "Draw", or "Not reported"
+// (match not finished/reported yet) — pull out the game score and classify
+// the outcome from the tracked player's own side so the UI can color it.
+function parseResult(resultString, ownUsername, ownDisplayName) {
+  const raw = resultString || "";
+  const score = (raw.match(/\d+-\d+-\d+/) || [])[0] || null;
+  const lower = raw.toLowerCase();
+  let outcome = "pending";
+  if (lower.includes("not reported")) outcome = "pending";
+  else if (lower.startsWith("draw")) outcome = "draw";
+  else if (lower.includes("won")) {
+    const ownLower = [ownUsername, ownDisplayName].filter(Boolean).map((s) => s.toLowerCase());
+    outcome = ownLower.some((n) => lower.startsWith(n)) ? "win" : "loss";
+  }
+  return { score, outcome };
 }
 
 // melee.gg only attaches a Decklists entry once a tournament organizer turns
@@ -240,11 +272,14 @@ function findTrackedInMatches(rows) {
             const opponents = opponentCompetitors
               .flatMap((c) => ((c.Team && c.Team.Players) || []).map((p) => p.DisplayName || p.Username));
             const opponentDecklists = opponentCompetitors.flatMap((c) => decklistLinks(c.Decklists));
+            const { score, outcome } = parseResult(row.ResultString, player.Username, player.DisplayName);
             found[tracked] = {
               table: row.TableNumberDescription || row.TableNumber,
               opponents,
               opponentDecklists,
               result: row.ResultString,
+              score,
+              outcome,
             };
           }
         }
@@ -296,11 +331,10 @@ async function pollGalacticOnce() {
       try {
         const { standingsRounds, pairingsRounds } = await meleeGetTournamentRounds(id);
         await sleep(MELEE_REQUEST_DELAY_MS);
-        const length = Math.min(Math.max(summary.ParticipatingCount || 0, 100), 2500);
 
         const standingRound = lastFlagged(standingsRounds);
         if (standingRound) {
-          const rows = await meleeGetRoundStandings(standingRound.id, length);
+          const rows = await meleeGetRoundStandings(standingRound.id);
           await sleep(MELEE_REQUEST_DELAY_MS);
           const found = findTrackedInStandings(rows);
           for (const [name, info] of Object.entries(found)) {
@@ -308,14 +342,21 @@ async function pollGalacticOnce() {
           }
         }
 
-        const pairingRound = lastFlagged(pairingsRounds);
-        if (pairingRound) {
-          const rows = await meleeGetRoundMatches(pairingRound.id, length);
+        // One request per started round (not just the latest) so the UI can
+        // show the tracked player's full match-by-match history, not only
+        // whatever round is currently in progress.
+        const startedPairingRounds = pairingsRounds.filter((r) => r.flag);
+        const matchesByPlayer = {};
+        for (const round of startedPairingRounds) {
+          const rows = await meleeGetRoundMatches(round.id);
           await sleep(MELEE_REQUEST_DELAY_MS);
           const found = findTrackedInMatches(rows);
           for (const [name, info] of Object.entries(found)) {
-            entry.players[name] = { ...(entry.players[name] || {}), pairing: { roundName: pairingRound.name, ...info } };
+            (matchesByPlayer[name] = matchesByPlayer[name] || []).push({ roundName: round.name, ...info });
           }
+        }
+        for (const [name, matches] of Object.entries(matchesByPlayer)) {
+          entry.players[name] = { ...(entry.players[name] || {}), matches };
         }
 
         entry.status = "started";
