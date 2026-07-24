@@ -66,6 +66,34 @@ en **dollars** (source TCGPlayer, marketplace américain), pas un prix garanti
 ni une conversion en euros. Le tableau affiche le "prix marché" ; le détail
 (prix bas + prix marché) est visible en survolant la valeur.
 
+## Suivi Galactic Championship (onglet "Galactic")
+
+Cet onglet suit automatiquement 3 pseudos (configurés en dur dans `server.js`,
+constante `MELEE_TRACKED_PLAYERS`) à travers les 5 tournois du
+[Galactic Championship Tournament Hub](https://melee.gg/Hub/View/37072) sur
+melee.gg (24–26/07/2026) : classement, round en cours, adversaire, table.
+
+- melee.gg n'a pas d'API publique documentée et ne renvoie pas d'en-tête CORS
+  non plus — mêmes symptômes que api.swu-db.com, donc même traitement : un
+  relais côté `server.js`. Ses endpoints internes ont été retrouvés en
+  inspectant son JS (`/Hub/SearchTournaments/{hubId}`,
+  `/Standing/GetRoundStandings/{roundId}`, `/Match/GetRoundMatches/{roundId}`).
+- melee.gg protège ces endpoints avec un WAF qui **bloque temporairement
+  l'IP appelante** après une poignée de requêtes rapprochées (constaté en
+  marge de l'implémentation). Le serveur ne rafraîchit donc que **toutes les
+  5 minutes**, en série, avec un vrai délai entre chaque requête — et saute
+  entièrement les tournois encore en phase d'inscription (aucun round posté)
+  pour limiter le nombre d'appels. C'est volontairement lent : le but est de
+  ne jamais risquer de bloquer ta propre connexion pendant que tu suis
+  l'événement en direct dans ton navigateur.
+- Les résultats sont mis en cache dans `data/galactic.json` (créé
+  automatiquement, ignoré par git). Le bouton "Forcer une actualisation"
+  déclenche un cycle immédiat plutôt que d'attendre les 5 minutes.
+- Le troisième pseudo (préfixe `Malet`) n'était pas certain au moment
+  d'écrire ceci ("Malette" ou "Malete") — le matching est fait par
+  sous-chaîne insensible à la casse pour couvrir les deux orthographes ; à
+  ajuster dans `MELEE_TRACKED_PLAYERS` si besoin.
+
 ## Données
 
 - Les cartes viennent de l'API publique et non-officielle

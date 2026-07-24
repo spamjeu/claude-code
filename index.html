@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="css/cards.css" />
 <link rel="stylesheet" href="css/decks.css" />
 <link rel="stylesheet" href="css/deckbuilder.css" />
+<link rel="stylesheet" href="css/galactic.css" />
 </head>
 <body>
 <header>
@@ -32,6 +33,7 @@
     <button class="tab active" data-tab="cards">🔎 Recherche de cartes</button>
     <button class="tab" data-tab="decks">🗂️ Base de decks</button>
     <button class="tab" data-tab="deckbuilder">🛠️ Deck Builder</button>
+    <button class="tab" data-tab="galactic">🏆 Galactic</button>
   </div>
 
   <!-- Le contenu de chaque onglet vit dans son propre fichier (partials/<tab>.html,
@@ -40,6 +42,7 @@
   <section class="tabpanel" data-tabpanel="cards"></section>
   <section class="tabpanel" data-tabpanel="decks" hidden></section>
   <section class="tabpanel" data-tabpanel="deckbuilder" hidden></section>
+  <section class="tabpanel" data-tabpanel="galactic" hidden></section>
 </main>
 
 <footer>
@@ -53,5 +56,6 @@
 <script src="js/cards.js" defer></script>
 <script src="js/decks.js" defer></script>
 <script src="js/deckbuilder.js" defer></script>
+<script src="js/galactic.js" defer></script>
 </body>
 </html>

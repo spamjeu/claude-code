@@ -41,6 +41,297 @@ const ASH_START_WEEK = Math.floor((ASH_RELEASE_DATE_MS - SWUSTATS_WEEK_ANCHOR_MS
 // numbers cover (e.g. "depuis le 11/07/2026") instead of just "ASH".
 const ASH_SEASON_START_ISO = new Date(ASH_RELEASE_DATE_MS).toISOString().slice(0, 10);
 
+// --- Galactic Championship tracker (melee.gg) --------------------------------
+// melee.gg has no documented public API and (like api.swu-db.com) no CORS
+// headers, so this needs the same server-side relay treatment. On top of
+// that it fronts everything with a WAF that 403s requests missing a
+// plausible browser Referer, and — confirmed by hand while building this —
+// temporarily blocks the calling IP outright after a handful of requests in
+// quick succession. So this polls far more conservatively than the swudb.com
+// deck sync above: one request in flight at a time, a real delay between
+// each, registration-phase tournaments are skipped after a single cheap
+// status check, and a failed poll cycle just waits for the next one instead
+// of retrying — better to under-refresh than to get the user's own IP
+// blocked from watching the tournament live in their browser.
+const MELEE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const MELEE_REFERER = "https://melee.gg/Hub/View/37072";
+const MELEE_HUB_ID = 37072;
+const MELEE_TOURNAMENTS = [
+  { id: 403891, label: "Last Chance Qualifier" },
+  { id: 403893, label: "Main Event" },
+  { id: 403894, label: "Galactic Open Premier" },
+  { id: 404187, label: "Galactic Open Eternal (Red)" },
+  { id: 412104, label: "Galactic Open Eternal (Blue)" },
+];
+// The third player's exact spelling wasn't certain ("Malette" vs "Malete")
+// at the time this was written — matched as a case-insensitive substring
+// against both username and display name so either spelling still hits.
+const MELEE_TRACKED_PLAYERS = ["Fred57155", "Pecoraban", "Malet"];
+const GALACTIC_FILE = path.join(ROOT, "data", "galactic.json");
+const GALACTIC_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const MELEE_REQUEST_DELAY_MS = 1500;
+
+function httpsRequest(url, { method = "GET", headers = {}, body = null } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, { method, headers }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+function meleeHeaders(extra) {
+  return { "user-agent": MELEE_UA, referer: MELEE_REFERER, ...extra };
+}
+
+async function meleeGetHtml(pathAndQuery) {
+  const { status, body } = await httpsRequest(`https://melee.gg${pathAndQuery}`, { headers: meleeHeaders({}) });
+  if (status !== 200) throw new Error(`melee.gg GET ${pathAndQuery} -> HTTP ${status}`);
+  return body;
+}
+
+async function meleePostForm(pathName, fields) {
+  const body = new URLSearchParams(fields).toString();
+  const { status, body: respBody } = await httpsRequest(`https://melee.gg${pathName}`, {
+    method: "POST",
+    headers: meleeHeaders({
+      "x-requested-with": "XMLHttpRequest",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "content-length": Buffer.byteLength(body),
+    }),
+    body,
+  });
+  if (status !== 200) throw new Error(`melee.gg POST ${pathName} -> HTTP ${status}`);
+  return JSON.parse(respBody);
+}
+
+// melee.gg's tables are server-side DataTables endpoints: every request
+// carries the full DataTables column/order/search envelope even though we
+// only ever want page 1 sorted by the default column.
+function dataTablesColumnFields(columns) {
+  const fields = {};
+  columns.forEach((c, idx) => {
+    fields[`columns[${idx}][data]`] = c;
+    fields[`columns[${idx}][name]`] = "";
+    fields[`columns[${idx}][searchable]`] = "true";
+    fields[`columns[${idx}][orderable]`] = "true";
+    fields[`columns[${idx}][search][value]`] = "";
+    fields[`columns[${idx}][search][regex]`] = "false";
+  });
+  return fields;
+}
+
+function dataTablesEnvelope(extra) {
+  return {
+    draw: "1", start: "0",
+    "search[value]": "", "search[regex]": "false",
+    "order[0][column]": "0", "order[0][dir]": "asc",
+    ...extra,
+  };
+}
+
+async function meleeGetHubTournaments() {
+  const fields = dataTablesEnvelope({
+    length: "50",
+    ...dataTablesColumnFields(["StartDate", "ID", "Name", "Game", "Status"]),
+  });
+  const data = await meleePostForm(`/Hub/SearchTournaments/${MELEE_HUB_ID}`, fields);
+  return data.data || [];
+}
+
+// Round IDs aren't exposed by any JSON endpoint — they only show up as
+// data-id attributes on the round-selector buttons rendered into the
+// tournament's own HTML page, and only once the tournament has actually
+// started (a tournament still in "Registration" renders no round selectors
+// at all). Standings buttons carry data-is-completed, pairings buttons carry
+// data-is-started — same round list, different "is this one ready" flag.
+function extractRoundSelectors(html, flagAttr) {
+  const re = new RegExp(`round-selector"[^>]*data-id="(\\d+)"[^>]*data-name="([^"]+)"[^>]*data-${flagAttr}="(True|False)"`, "g");
+  const rounds = [];
+  let m;
+  while ((m = re.exec(html))) rounds.push({ id: m[1], name: m[2], flag: m[3] === "True" });
+  return rounds;
+}
+
+function lastFlagged(rounds) {
+  const flagged = rounds.filter((r) => r.flag);
+  return flagged.length ? flagged[flagged.length - 1] : null;
+}
+
+async function meleeGetTournamentRounds(tournamentId) {
+  const html = await meleeGetHtml(`/Tournament/View/${tournamentId}`);
+  return {
+    standingsRounds: extractRoundSelectors(html, "is-completed"),
+    pairingsRounds: extractRoundSelectors(html, "is-started"),
+  };
+}
+
+async function meleeGetRoundStandings(roundId, length) {
+  const fields = dataTablesEnvelope({
+    length: String(length),
+    roundId: String(roundId),
+    ...dataTablesColumnFields(["Rank", "Player", "Decklists", "MatchRecord", "GameRecord", "Points", "OpponentCount"]),
+  });
+  const data = await meleePostForm(`/Standing/GetRoundStandings/${roundId}`, fields);
+  return data.data || [];
+}
+
+async function meleeGetRoundMatches(roundId, length) {
+  const fields = dataTablesEnvelope({
+    length: String(length),
+    ...dataTablesColumnFields(["TableNumber", "PodNumber", "Teams", "Decklists", "ResultString"]),
+  });
+  const data = await meleePostForm(`/Match/GetRoundMatches/${roundId}`, fields);
+  return data.data || [];
+}
+
+function matchesTrackedPlayer(needle, username, displayName) {
+  return (username || "").toLowerCase().includes(needle) || (displayName || "").toLowerCase().includes(needle);
+}
+
+function findTrackedInStandings(rows) {
+  const found = {};
+  for (const row of rows) {
+    for (const player of (row.Team && row.Team.Players) || []) {
+      for (const tracked of MELEE_TRACKED_PLAYERS) {
+        if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
+          found[tracked] = {
+            username: player.Username,
+            displayName: player.DisplayName,
+            rank: row.Rank,
+            matchRecord: row.MatchRecord,
+            gameRecord: row.GameRecord,
+            points: row.Points,
+            roundName: row.Round,
+          };
+        }
+      }
+    }
+  }
+  return found;
+}
+
+// The exact shape of a match row's "Teams" field wasn't verified live (the
+// tracked API got IP-blocked mid-investigation before this could be tested
+// against an in-progress round) — this defensively accepts either
+// Teams[].Players or Teams[].Team.Players so it degrades gracefully instead
+// of throwing if the real shape turns out to be the nested one.
+function teamPlayers(team) {
+  return team.Players || (team.Team && team.Team.Players) || [];
+}
+
+function findTrackedInMatches(rows) {
+  const found = {};
+  for (const row of rows) {
+    const teams = row.Teams || [];
+    for (const team of teams) {
+      for (const player of teamPlayers(team)) {
+        for (const tracked of MELEE_TRACKED_PLAYERS) {
+          if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
+            const opponents = teams.filter((t) => t !== team)
+              .flatMap((t) => teamPlayers(t).map((p) => p.DisplayName || p.Username));
+            found[tracked] = { table: row.TableNumberDescription || row.TableNumber, opponents, result: row.ResultString };
+          }
+        }
+      }
+    }
+  }
+  return found;
+}
+
+function loadGalactic() {
+  try { return JSON.parse(fs.readFileSync(GALACTIC_FILE, "utf8")); }
+  catch { return { lastPolled: null, lastError: null, trackedPlayers: MELEE_TRACKED_PLAYERS, tournaments: {} }; }
+}
+
+function saveGalactic(state) {
+  fs.mkdirSync(path.dirname(GALACTIC_FILE), { recursive: true });
+  fs.writeFileSync(GALACTIC_FILE, JSON.stringify(state, null, 1));
+}
+
+let galacticPollInProgress = false;
+
+async function pollGalacticOnce() {
+  if (galacticPollInProgress) return;
+  galacticPollInProgress = true;
+  const state = loadGalactic();
+  state.trackedPlayers = MELEE_TRACKED_PLAYERS;
+  try {
+    const summaries = await meleeGetHubTournaments();
+    await sleep(MELEE_REQUEST_DELAY_MS);
+    const summaryById = Object.fromEntries(summaries.map((t) => [t.ID, t]));
+
+    for (const { id, label } of MELEE_TOURNAMENTS) {
+      const summary = summaryById[id];
+      const previous = state.tournaments[id] || {};
+      const entry = {
+        id, label,
+        name: summary ? summary.Name : label,
+        statusDescription: summary ? summary.StatusDescription : "Inconnu",
+        playerCount: summary ? summary.ParticipatingCount : null,
+        players: previous.players || {},
+      };
+
+      if (!summary || summary.StatusDescription === "Registration") {
+        entry.status = "not_started";
+        state.tournaments[id] = entry;
+        continue;
+      }
+
+      try {
+        const { standingsRounds, pairingsRounds } = await meleeGetTournamentRounds(id);
+        await sleep(MELEE_REQUEST_DELAY_MS);
+        const length = Math.min(Math.max(summary.ParticipatingCount || 0, 100), 2500);
+
+        const standingRound = lastFlagged(standingsRounds);
+        if (standingRound) {
+          const rows = await meleeGetRoundStandings(standingRound.id, length);
+          await sleep(MELEE_REQUEST_DELAY_MS);
+          const found = findTrackedInStandings(rows);
+          for (const [name, info] of Object.entries(found)) {
+            entry.players[name] = { ...(entry.players[name] || {}), standing: info };
+          }
+        }
+
+        const pairingRound = lastFlagged(pairingsRounds);
+        if (pairingRound) {
+          const rows = await meleeGetRoundMatches(pairingRound.id, length);
+          await sleep(MELEE_REQUEST_DELAY_MS);
+          const found = findTrackedInMatches(rows);
+          for (const [name, info] of Object.entries(found)) {
+            entry.players[name] = { ...(entry.players[name] || {}), pairing: { roundName: pairingRound.name, ...info } };
+          }
+        }
+
+        entry.status = "started";
+      } catch (err) {
+        entry.status = "error";
+        entry.error = err.message;
+      }
+
+      state.tournaments[id] = entry;
+    }
+
+    state.lastPolled = new Date().toISOString();
+    state.lastError = null;
+  } catch (err) {
+    state.lastError = err.message;
+  } finally {
+    saveGalactic(state);
+    galacticPollInProgress = false;
+  }
+}
+
+function scheduleGalacticPolling() {
+  if (!MELEE_TRACKED_PLAYERS.length) return;
+  const runAndLog = () => pollGalacticOnce().catch((err) => console.error("Galactic poll failed:", err.message));
+  runAndLog();
+  setInterval(runAndLog, GALACTIC_POLL_INTERVAL_MS);
+}
+
 function httpsGetJson(url) {
   return new Promise((resolve, reject) => {
     https.get(url, { headers: { "user-agent": "Mozilla/5.0" } }, (res) => {
@@ -601,6 +892,30 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/galactic/status") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(loadGalactic()));
+    return;
+  }
+
+  if (url.pathname === "/api/galactic/refresh" && req.method === "POST") {
+    if (galacticPollInProgress) {
+      res.writeHead(409, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Une actualisation melee.gg est déjà en cours." }));
+      return;
+    }
+    pollGalacticOnce()
+      .then(() => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(loadGalactic()));
+      })
+      .catch((err) => {
+        res.writeHead(502, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
   if (url.pathname === "/api/decks" && req.method === "DELETE") {
     if (syncInProgress) {
       res.writeHead(409, { "content-type": "application/json" });
@@ -632,4 +947,5 @@ function handleRequest(req, res) {
 
 server.listen(PORT, () => {
   console.log(`SWU Card Finder running at http://localhost:${PORT}`);
+  scheduleGalacticPolling();
 });
