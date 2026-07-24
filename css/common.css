@@ -84,3 +84,16 @@ footer a{color:var(--accent2)}
 .aspect-Villainy{background:#040004}
 .aspect-icon{width:18px;height:18px;object-fit:contain;vertical-align:middle}
 .aspect-icon-sm{width:15px;height:15px}
+
+@media (max-width:640px){
+  header{padding:18px 12px 12px}
+  main{padding:0 12px 40px}
+  footer{padding:0 12px 30px}
+  h1{font-size:1.15rem}
+  .sub{font-size:.85rem}
+  .panel{padding:12px}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px}
+  .tab{padding:9px 12px;font-size:.78rem;flex:0 0 auto}
+  input[type=text]{min-width:0}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+}

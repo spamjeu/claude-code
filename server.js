@@ -63,7 +63,7 @@ const MELEE_TOURNAMENTS = [
   { id: 404187, label: "Galactic Open Eternal (Red)" },
   { id: 412104, label: "Galactic Open Eternal (Blue)" },
 ];
-const MELEE_TRACKED_PLAYERS = ["Fred57155", "Pecoraban", "Malette"];
+const MELEE_TRACKED_PLAYERS = ["Pecoraban", "Fred57155", "Malette"];
 const GALACTIC_FILE = path.join(ROOT, "data", "galactic.json");
 const GALACTIC_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const MELEE_REQUEST_DELAY_MS = 1500;

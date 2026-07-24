@@ -1,3 +1,8 @@
+.gal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .gal-player-card strong{font-size:1rem}
 .gal-tournament-block{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:.88rem}
 .gal-tournament-block .badge{margin-bottom:6px}
+
+@media (max-width:760px){
+  .gal-grid{grid-template-columns:1fr}
+}
