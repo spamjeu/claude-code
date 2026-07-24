@@ -17,6 +17,13 @@ window.SWU_TABS.galactic = function initGalactic() {
     return new Date(iso).toLocaleTimeString("fr-FR");
   }
 
+  function decklistLinksHtml(decklists) {
+    if (!decklists || !decklists.length) return "";
+    return decklists.map((d) =>
+      `<a href="https://melee.gg/Decklist/View/${esc(d.id)}" target="_blank" rel="noopener" class="badge">📄 ${esc(d.name)}</a>`
+    ).join(" ");
+  }
+
   function renderPlayerCard(name, occurrences) {
     const div = document.createElement("div");
     div.className = "panel gal-player-card";
@@ -28,13 +35,15 @@ window.SWU_TABS.galactic = function initGalactic() {
       const parts = [];
       if (pairing) {
         const opponents = (pairing.opponents || []).map(esc).join(", ") || "?";
+        const opponentDeck = decklistLinksHtml(pairing.opponentDecklists);
         parts.push(`
           <div class="gal-pairing">
             <div class="gal-round-label">${esc(pairing.roundName)} · Table ${esc(pairing.table ?? "?")}</div>
-            <div>vs <strong>${opponents}</strong> <span class="badge">${esc(pairing.result || "en cours")}</span></div>
+            <div>vs <strong>${opponents}</strong> <span class="badge">${esc(pairing.result || "en cours")}</span>${opponentDeck ? ` ${opponentDeck}` : ""}</div>
           </div>`);
       }
       if (standing) {
+        const ownDeck = decklistLinksHtml(standing.decklists);
         parts.push(`
           <div class="gal-standing">
             <div class="gal-round-label">Classement — ${esc(standing.roundName)}</div>
@@ -44,6 +53,7 @@ window.SWU_TABS.galactic = function initGalactic() {
               <div class="gal-stat"><div class="gal-stat-value">${esc(standing.gameRecord)}</div><div class="gal-stat-label">Parties</div></div>
               <div class="gal-stat"><div class="gal-stat-value">${esc(standing.points)}</div><div class="gal-stat-label">Points</div></div>
             </div>
+            ${ownDeck ? `<div style="margin-top:6px">${ownDeck}</div>` : ""}
           </div>`);
       }
       return `<div class="gal-tournament-block"><div class="badge">${esc(tournamentLabel)}</div>${parts.join("")}</div>`;

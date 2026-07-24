@@ -179,7 +179,7 @@ async function meleeGetRoundStandings(roundId, length) {
 async function meleeGetRoundMatches(roundId, length) {
   const fields = dataTablesEnvelope({
     length: String(length),
-    ...dataTablesColumnFields(["TableNumber", "PodNumber", "Teams", "Decklists", "ResultString"]),
+    ...dataTablesColumnFields(["TableNumber", "PodNumber", "Competitors", "Decklists", "ResultString"]),
   });
   const data = await meleePostForm(`/Match/GetRoundMatches/${roundId}`, fields);
   return data.data || [];
@@ -187,6 +187,17 @@ async function meleeGetRoundMatches(roundId, length) {
 
 function matchesTrackedPlayer(needle, username, displayName) {
   return (username || "").toLowerCase().includes(needle) || (displayName || "").toLowerCase().includes(needle);
+}
+
+// melee.gg only attaches a Decklists entry once a tournament organizer turns
+// decklist collection on for the event (none of the 2026 Galactic
+// Championship tournaments currently do — DecklistEnabled is false on all
+// five), so this is normally empty, but the field is cheap to carry through
+// for whenever an event does have it.
+function decklistLinks(decklists) {
+  return (decklists || [])
+    .filter((d) => d && d.DecklistId)
+    .map((d) => ({ id: d.DecklistId, name: d.DecklistName || "Decklist" }));
 }
 
 function findTrackedInStandings(rows) {
@@ -203,6 +214,7 @@ function findTrackedInStandings(rows) {
             gameRecord: row.GameRecord,
             points: row.Points,
             roundName: row.Round,
+            decklists: decklistLinks(row.Decklists),
           };
         }
       }
@@ -211,26 +223,29 @@ function findTrackedInStandings(rows) {
   return found;
 }
 
-// The exact shape of a match row's "Teams" field wasn't verified live (the
-// tracked API got IP-blocked mid-investigation before this could be tested
-// against an in-progress round) — this defensively accepts either
-// Teams[].Players or Teams[].Team.Players so it degrades gracefully instead
-// of throwing if the real shape turns out to be the nested one.
-function teamPlayers(team) {
-  return team.Players || (team.Team && team.Team.Players) || [];
-}
-
+// A match row's players live under Competitors[].Team.Players (verified
+// live against an in-progress round) — each Competitor also carries its own
+// Decklists, which is where an opponent's public decklist (when the event
+// collects them) shows up.
 function findTrackedInMatches(rows) {
   const found = {};
   for (const row of rows) {
-    const teams = row.Teams || [];
-    for (const team of teams) {
-      for (const player of teamPlayers(team)) {
+    const competitors = row.Competitors || [];
+    for (const competitor of competitors) {
+      const players = (competitor.Team && competitor.Team.Players) || [];
+      for (const player of players) {
         for (const tracked of MELEE_TRACKED_PLAYERS) {
           if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
-            const opponents = teams.filter((t) => t !== team)
-              .flatMap((t) => teamPlayers(t).map((p) => p.DisplayName || p.Username));
-            found[tracked] = { table: row.TableNumberDescription || row.TableNumber, opponents, result: row.ResultString };
+            const opponentCompetitors = competitors.filter((c) => c !== competitor);
+            const opponents = opponentCompetitors
+              .flatMap((c) => ((c.Team && c.Team.Players) || []).map((p) => p.DisplayName || p.Username));
+            const opponentDecklists = opponentCompetitors.flatMap((c) => decklistLinks(c.Decklists));
+            found[tracked] = {
+              table: row.TableNumberDescription || row.TableNumber,
+              opponents,
+              opponentDecklists,
+              result: row.ResultString,
+            };
           }
         }
       }
