@@ -380,7 +380,7 @@ async function pollGalacticOnce() {
           entry.players[name] = { ...(entry.players[name] || {}), matches };
         }
 
-        entry.status = "started";
+        entry.status = summary.StatusDescription === "Ended" ? "finished" : "started";
       } catch (err) {
         entry.status = "error";
         entry.error = err.message;

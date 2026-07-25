@@ -24,11 +24,11 @@ window.SWU_TABS.galactic = function initGalactic() {
     ).join(" ");
   }
 
-  // An event counts as "finished" for a player once every paired round has a
-  // reported result — no pending round left means there's nothing left to
-  // watch live, so it's safe to collapse by default.
-  function isEventFinished({ matches }) {
-    return !!(matches && matches.length && matches.every((m) => m.outcome !== "pending"));
+  // On se fie au statut melee.gg, pas aux matchs : entre deux rondes d'un
+  // tournoi en cours, aucun match n'est "pending" (la ronde suivante n'est pas
+  // encore appariée) — le déduire des matchs replierait un event actif.
+  function isEventFinished(t) {
+    return t.statusDescription === "Ended" || t.status === "finished";
   }
 
   // Data auto-refreshes every 30s; without this, a manual expand/collapse
@@ -42,7 +42,7 @@ window.SWU_TABS.galactic = function initGalactic() {
       div.innerHTML = `<strong>${esc(name)}</strong><div class="status">Pas encore repéré dans un tournoi.</div>`;
       return div;
     }
-    const blocks = occurrences.map(({ tournamentLabel, standing, matches, isFinished }) => {
+    const blocks = occurrences.map(({ tournamentId, tournamentLabel, standing, matches, isFinished }) => {
       const parts = [];
       if (standing) {
         const ownDeck = decklistLinksHtml(standing.decklists);
@@ -75,7 +75,8 @@ window.SWU_TABS.galactic = function initGalactic() {
         }).join("");
         parts.push(`<div class="gal-matches"><div class="gal-round-label">Matchs</div>${rows}</div>`);
       }
-      const overrideKey = `${name}::${tournamentLabel}`;
+      // Clé sur l'id : melee.gg renomme parfois un tournoi en cours de route.
+      const overrideKey = `${name}::${tournamentId}`;
       const collapsed = collapsedOverrides.hasOwnProperty(overrideKey) ? collapsedOverrides[overrideKey] : isFinished;
       return `<div class="gal-tournament-block${collapsed ? " collapsed" : ""}" data-override-key="${esc(overrideKey)}">
         <div class="gal-tournament-header"><span class="gal-tournament-toggle">▾</span><span class="badge">${esc(tournamentLabel)}</span></div>
@@ -101,9 +102,13 @@ window.SWU_TABS.galactic = function initGalactic() {
     trackedPlayers.forEach((name) => {
       const occurrences = tournaments
         .filter((t) => t.players && t.players[name])
-        .map((t) => ({ tournamentLabel: t.name || t.label, ...t.players[name] }))
-        .map((occ) => ({ ...occ, isFinished: isEventFinished(occ) }))
-        // Active event (still being played) first, finished ones pushed down.
+        .map((t) => ({
+          tournamentId: t.id,
+          tournamentLabel: t.name || t.label,
+          isFinished: isEventFinished(t),
+          ...t.players[name],
+        }))
+        // Event en cours d'abord, events terminés relégués en dessous.
         .sort((a, b) => a.isFinished - b.isFinished);
       playersEl.appendChild(renderPlayerCard(name, occurrences));
     });
