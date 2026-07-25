@@ -2,6 +2,10 @@
 .gal-player-card strong{font-size:1rem}
 .gal-tournament-block{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:.88rem}
 .gal-tournament-block .badge{margin-bottom:6px}
+.gal-tournament-header{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.gal-tournament-toggle{display:inline-block;font-size:.7rem;color:var(--muted);transition:transform .15s ease;flex:0 0 auto}
+.gal-tournament-block.collapsed .gal-tournament-toggle{transform:rotate(-90deg)}
+.gal-tournament-block.collapsed .gal-tournament-body{display:none}
 .gal-round-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .gal-standing{margin-top:10px}
 .gal-stats{display:flex;gap:8px}

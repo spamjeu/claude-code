@@ -24,6 +24,17 @@ window.SWU_TABS.galactic = function initGalactic() {
     ).join(" ");
   }
 
+  // An event counts as "finished" for a player once every paired round has a
+  // reported result — no pending round left means there's nothing left to
+  // watch live, so it's safe to collapse by default.
+  function isEventFinished({ matches }) {
+    return !!(matches && matches.length && matches.every((m) => m.outcome !== "pending"));
+  }
+
+  // Data auto-refreshes every 30s; without this, a manual expand/collapse
+  // click would get silently undone by the next refresh.
+  const collapsedOverrides = {};
+
   function renderPlayerCard(name, occurrences) {
     const div = document.createElement("div");
     div.className = "panel gal-player-card";
@@ -31,7 +42,7 @@ window.SWU_TABS.galactic = function initGalactic() {
       div.innerHTML = `<strong>${esc(name)}</strong><div class="status">Pas encore repéré dans un tournoi.</div>`;
       return div;
     }
-    const blocks = occurrences.map(({ tournamentLabel, standing, matches }) => {
+    const blocks = occurrences.map(({ tournamentLabel, standing, matches, isFinished }) => {
       const parts = [];
       if (standing) {
         const ownDeck = decklistLinksHtml(standing.decklists);
@@ -64,9 +75,21 @@ window.SWU_TABS.galactic = function initGalactic() {
         }).join("");
         parts.push(`<div class="gal-matches"><div class="gal-round-label">Matchs</div>${rows}</div>`);
       }
-      return `<div class="gal-tournament-block"><div class="badge">${esc(tournamentLabel)}</div>${parts.join("")}</div>`;
+      const overrideKey = `${name}::${tournamentLabel}`;
+      const collapsed = collapsedOverrides.hasOwnProperty(overrideKey) ? collapsedOverrides[overrideKey] : isFinished;
+      return `<div class="gal-tournament-block${collapsed ? " collapsed" : ""}" data-override-key="${esc(overrideKey)}">
+        <div class="gal-tournament-header"><span class="gal-tournament-toggle">▾</span><span class="badge">${esc(tournamentLabel)}</span></div>
+        <div class="gal-tournament-body">${parts.join("")}</div>
+      </div>`;
     }).join("");
     div.innerHTML = `<strong>${esc(name)}</strong>${blocks}`;
+    div.querySelectorAll(".gal-tournament-header").forEach((header) => {
+      header.addEventListener("click", () => {
+        const block = header.closest(".gal-tournament-block");
+        block.classList.toggle("collapsed");
+        collapsedOverrides[block.dataset.overrideKey] = block.classList.contains("collapsed");
+      });
+    });
     return div;
   }
 
@@ -78,7 +101,10 @@ window.SWU_TABS.galactic = function initGalactic() {
     trackedPlayers.forEach((name) => {
       const occurrences = tournaments
         .filter((t) => t.players && t.players[name])
-        .map((t) => ({ tournamentLabel: t.name || t.label, ...t.players[name] }));
+        .map((t) => ({ tournamentLabel: t.name || t.label, ...t.players[name] }))
+        .map((occ) => ({ ...occ, isFinished: isEventFinished(occ) }))
+        // Active event (still being played) first, finished ones pushed down.
+        .sort((a, b) => a.isFinished - b.isFinished);
       playersEl.appendChild(renderPlayerCard(name, occurrences));
     });
 
