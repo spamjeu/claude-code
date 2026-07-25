@@ -145,17 +145,24 @@ async function meleeGetHubTournaments() {
 // started (a tournament still in "Registration" renders no round selectors
 // at all). Standings buttons carry data-is-completed, pairings buttons carry
 // data-is-started — same round list, different "is this one ready" flag.
+// On isole d'abord la balise, puis on lit chaque attribut séparément : melee.gg
+// ne sort pas toujours data-id / data-name / data-is-* dans le même ordre (et
+// pas du tout le même sur la page d'un tournoi terminé), donc une seule regex
+// qui impose l'ordre rate silencieusement toutes les rondes.
 function extractRoundSelectors(html, flagAttr) {
-  const re = new RegExp(`round-selector"[^>]*data-id="(\\d+)"[^>]*data-name="([^"]+)"[^>]*data-${flagAttr}="(True|False)"`, "g");
   const rounds = [];
-  let m;
-  while ((m = re.exec(html))) rounds.push({ id: m[1], name: m[2], flag: m[3] === "True" });
+  for (const [tag] of html.matchAll(/<[^>]*round-selector[^>]*>/g)) {
+    const id = (tag.match(/data-id="(\d+)"/) || [])[1];
+    const name = (tag.match(/data-name="([^"]*)"/) || [])[1];
+    if (!id || !name) continue;
+    const flag = (tag.match(new RegExp(`data-${flagAttr}="(True|False)"`)) || [])[1] === "True";
+    rounds.push({ id, name, flag });
+  }
   return rounds;
 }
 
-function lastFlagged(rounds) {
-  const flagged = rounds.filter((r) => r.flag);
-  return flagged.length ? flagged[flagged.length - 1] : null;
+function roundNumber(round) {
+  return parseInt((String(round.name).match(/\d+/) || [0])[0], 10);
 }
 
 async function meleeGetTournamentRounds(tournamentId) {
@@ -200,8 +207,13 @@ async function meleeGetRoundMatches(roundId) {
   });
 }
 
+// Renvoie "exact" / "partial" / null : dans un tournoi à 1486 joueurs, un
+// "Malette_TCG" contient "malette" et écraserait le vrai Malette (le dernier
+// vu gagne). On garde le match partiel en secours, mais un match exact prime.
 function matchesTrackedPlayer(needle, username, displayName) {
-  return (username || "").toLowerCase().includes(needle) || (displayName || "").toLowerCase().includes(needle);
+  const names = [username, displayName].filter(Boolean).map((s) => s.toLowerCase());
+  if (names.some((n) => n === needle)) return "exact";
+  return names.some((n) => n.includes(needle)) ? "partial" : null;
 }
 
 // ResultString reads like "Pecoraban won 2-0-0", "Draw", or "Not reported"
@@ -250,21 +262,23 @@ function standingsRankIndex(rows) {
 
 function findTrackedInStandings(rows) {
   const found = {};
+  const quality = {};
   for (const row of rows) {
     for (const player of (row.Team && row.Team.Players) || []) {
       for (const tracked of MELEE_TRACKED_PLAYERS) {
-        if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
-          found[tracked] = {
-            username: player.Username,
-            displayName: player.DisplayName,
-            rank: row.Rank,
-            matchRecord: row.MatchRecord,
-            gameRecord: row.GameRecord,
-            points: row.Points,
-            roundName: row.Round,
-            decklists: decklistLinks(row.Decklists),
-          };
-        }
+        const hit = matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName);
+        if (!hit || quality[tracked] === "exact") continue;
+        quality[tracked] = hit;
+        found[tracked] = {
+          username: player.Username,
+          displayName: player.DisplayName,
+          rank: row.Rank,
+          matchRecord: row.MatchRecord,
+          gameRecord: row.GameRecord,
+          points: row.Points,
+          roundName: row.Round,
+          decklists: decklistLinks(row.Decklists),
+        };
       }
     }
   }
@@ -277,13 +291,16 @@ function findTrackedInStandings(rows) {
 // collects them) shows up.
 function findTrackedInMatches(rows, rankIndex) {
   const found = {};
+  const quality = {};
   for (const row of rows) {
     const competitors = row.Competitors || [];
     for (const competitor of competitors) {
       const players = (competitor.Team && competitor.Team.Players) || [];
       for (const player of players) {
         for (const tracked of MELEE_TRACKED_PLAYERS) {
-          if (matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName)) {
+          const hit = matchesTrackedPlayer(tracked.toLowerCase(), player.Username, player.DisplayName);
+          if (hit && quality[tracked] !== "exact") {
+            quality[tracked] = hit;
             const opponentCompetitors = competitors.filter((c) => c !== competitor);
             const opponents = opponentCompetitors
               .flatMap((c) => ((c.Team && c.Team.Players) || []).map((p) => ({
@@ -333,16 +350,34 @@ async function pollGalacticOnce() {
     for (const { id, label } of MELEE_TOURNAMENTS) {
       const summary = summaryById[id];
       const previous = state.tournaments[id] || {};
+      // players/roundCache repartent vides à chaque poll réussi : les réutiliser
+      // en permanence faisait qu'une ronde ratée restait affichée pour toujours
+      // comme si elle était à jour (classement figé sur une vieille ronde). On
+      // ne retombe sur les anciennes données que si le poll échoue (catch).
       const entry = {
         id, label,
         name: summary ? summary.Name : label,
         statusDescription: summary ? summary.StatusDescription : "Inconnu",
         playerCount: summary ? summary.ParticipatingCount : null,
-        players: previous.players || {},
+        players: {},
       };
 
       if (!summary || summary.StatusDescription === "Registration") {
         entry.status = "not_started";
+        entry.players = previous.players || {};
+        entry.roundCache = previous.roundCache;
+        state.tournaments[id] = entry;
+        continue;
+      }
+
+      // Un tournoi terminé ne bougera plus : une fois son instantané complet
+      // récupéré, on arrête de l'interroger. Sinon on repaie ses 8 rondes de
+      // requêtes toutes les 5 minutes, indéfiniment.
+      if (summary.StatusDescription === "Ended" && previous.complete) {
+        Object.assign(entry, {
+          status: "finished", complete: true,
+          players: previous.players || {}, roundCache: previous.roundCache, rounds: previous.rounds,
+        });
         state.tournaments[id] = entry;
         continue;
       }
@@ -351,27 +386,55 @@ async function pollGalacticOnce() {
         const { standingsRounds, pairingsRounds } = await meleeGetTournamentRounds(id);
         await sleep(MELEE_REQUEST_DELAY_MS);
 
-        const standingRound = lastFlagged(standingsRounds);
+        // melee.gg ne publie pas le classement de la toute dernière ronde d'un
+        // tournoi terminé (elle répond 0 ligne) : on remonte les rondes jusqu'à
+        // en trouver une servie. Sans ça, plus aucun classement ni rang
+        // d'adversaire dès qu'un tournoi se termine.
+        const byRound = (a, b) => roundNumber(a) - roundNumber(b);
+        const flagged = standingsRounds.filter((r) => r.flag).sort(byRound);
+        const candidates = (flagged.length ? flagged : pairingsRounds.filter((r) => r.flag).sort(byRound))
+          .slice(-3).reverse();
         let opponentRankIndex = {};
-        if (standingRound) {
-          const rows = await meleeGetRoundStandings(standingRound.id);
+        for (const round of candidates) {
+          const rows = await meleeGetRoundStandings(round.id);
           await sleep(MELEE_REQUEST_DELAY_MS);
+          if (!rows.length) continue;
           opponentRankIndex = standingsRankIndex(rows);
           const found = findTrackedInStandings(rows);
           for (const [name, info] of Object.entries(found)) {
             entry.players[name] = { ...(entry.players[name] || {}), standing: info };
           }
+          break;
         }
 
         // One request per started round (not just the latest) so the UI can
         // show the tracked player's full match-by-match history, not only
         // whatever round is currently in progress.
+        //
+        // Une ronde dont tous les matchs suivis sont reportés ne bougera plus :
+        // on la garde en cache et on ne redemande que les rondes en cours. Sans
+        // ça on re-télécharge tout l'historique toutes les 5 min (le LCQ seul =
+        // 8 rondes x 3 pages), soit le meilleur moyen de se faire bloquer.
+        // Une ronde n'est réutilisable que si elle est jouée ET que les rangs
+        // des adversaires ont été résolus : un résultat récupéré avant que le
+        // classement n'existe a des rangs nuls, les figer les perdrait à jamais
+        // (c'est ce qui a vidé tous les badges de rang). Un cache vide veut dire
+        // "pas encore appariée / bye" : à retenter aussi.
+        const usable = (m) => m && Object.keys(m).length
+          && Object.values(m).every((v) => v.outcome !== "pending"
+            && (v.opponents || []).every((o) => o.rank != null));
+        const previousCache = previous.roundCache || {};
+        const roundCache = {};
         const startedPairingRounds = pairingsRounds.filter((r) => r.flag);
         const matchesByPlayer = {};
         for (const round of startedPairingRounds) {
-          const rows = await meleeGetRoundMatches(round.id);
-          await sleep(MELEE_REQUEST_DELAY_MS);
-          const found = findTrackedInMatches(rows, opponentRankIndex);
+          let found = previousCache[round.id];
+          if (!usable(found)) {
+            const rows = await meleeGetRoundMatches(round.id);
+            await sleep(MELEE_REQUEST_DELAY_MS);
+            found = findTrackedInMatches(rows, opponentRankIndex);
+          }
+          if (usable(found)) roundCache[round.id] = found;
           for (const [name, info] of Object.entries(found)) {
             (matchesByPlayer[name] = matchesByPlayer[name] || []).push({ roundName: round.name, ...info });
           }
@@ -380,15 +443,24 @@ async function pollGalacticOnce() {
           entry.players[name] = { ...(entry.players[name] || {}), matches };
         }
 
+        entry.roundCache = roundCache;
+        entry.rounds = startedPairingRounds.length;
         entry.status = summary.StatusDescription === "Ended" ? "finished" : "started";
+        entry.complete = entry.status === "finished";
       } catch (err) {
         entry.status = "error";
         entry.error = err.message;
+        entry.players = previous.players || {};
+        entry.roundCache = previous.roundCache;
+        entry.rounds = previous.rounds;
       }
 
       state.tournaments[id] = entry;
     }
 
+    // L'ordre des clés d'un objet JSON n'est pas fiable côté client (clés
+    // numériques = ordre croissant, pas l'ordre déclaré ici).
+    state.order = MELEE_TOURNAMENTS.map((t) => t.id);
     state.lastPolled = new Date().toISOString();
     state.lastError = null;
   } catch (err) {

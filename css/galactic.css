@@ -1,11 +1,32 @@
-.gal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+/* --good/--bad ne sont réglés que pour le thème sombre : sur --panel2 clair le
+   vert tombe à ~2:1 de contraste, or gagné/perdu est le signal principal des
+   cartes. On garde les couleurs saturées pour les bordures, une encre plus
+   foncée pour le texte. */
+:root{--gal-win:var(--good);--gal-loss:var(--bad)}
+@media (prefers-color-scheme:light){:root{--gal-win:#1d7a43;--gal-loss:#b3352f}}
+:root[data-theme="light"]{--gal-win:#1d7a43;--gal-loss:#b3352f}
+:root[data-theme="dark"]{--gal-win:var(--good);--gal-loss:var(--bad)}
+
+/* auto-fit plutôt que 3 colonnes figées : suit le nombre de pseudos suivis et
+   ne coince plus les cartes entre 760 et 900px. */
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 .gal-player-card strong{font-size:1rem}
+.gal-player-sum{color:var(--muted);font-size:.75rem;font-family:var(--mono);margin-top:2px}
+.gal-updated{animation:gal-flash 2s ease-out}
+@keyframes gal-flash{0%{box-shadow:0 0 0 2px var(--accent2)}100%{box-shadow:0 0 0 2px transparent}}
+
 .gal-tournament-block{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:.88rem}
-.gal-tournament-block .badge{margin-bottom:6px}
-.gal-tournament-header{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.gal-tournament-header{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  padding:2px 4px;margin:0 -4px;border-radius:4px}
+.gal-tournament-header:hover{background:var(--panel2)}
 .gal-tournament-toggle{display:inline-block;font-size:.7rem;color:var(--muted);transition:transform .15s ease;flex:0 0 auto}
+.gal-tournament-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gal-tournament-summary{margin-left:auto;flex:0 0 auto;color:var(--muted);font-size:.75rem;font-family:var(--mono)}
+.gal-live{color:var(--accent2);font-weight:700}
+.gal-out{color:var(--muted);font-style:italic}
 .gal-tournament-block.collapsed .gal-tournament-toggle{transform:rotate(-90deg)}
 .gal-tournament-block.collapsed .gal-tournament-body{display:none}
+
 .gal-round-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .gal-standing{margin-top:10px}
 .gal-stats{display:flex;gap:8px}
@@ -18,20 +39,35 @@
 .gal-match-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-left:3px solid var(--border);
   background:var(--panel2);border-radius:0 4px 4px 0;margin-top:4px;font-size:.85rem}
 .gal-match-round{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;flex:0 0 auto;min-width:60px}
+.gal-match-table{color:var(--muted);font-size:.7rem;font-family:var(--mono);flex:0 0 auto}
 .gal-match-vs{flex:1;min-width:0}
 .gal-match-score{flex:0 0 auto;font-weight:700;font-family:var(--mono)}
+/* Les decklists sont des liens, pas des badges de statut : nom tronqué (les
+   noms melee.gg font 50+ caractères et noyaient la ligne) + couleur de lien. */
+.gal-deck{display:inline-block;max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  vertical-align:bottom;color:var(--accent2);text-decoration:none}
+.gal-deck:hover{border-color:var(--accent2)}
 .gal-outcome-win{border-left-color:var(--good)}
-.gal-outcome-win .gal-match-score{color:var(--good)}
+.gal-outcome-win .gal-match-score{color:var(--gal-win)}
 .gal-outcome-loss{border-left-color:var(--bad)}
-.gal-outcome-loss .gal-match-score{color:var(--bad)}
+.gal-outcome-loss .gal-match-score{color:var(--gal-loss)}
 .gal-outcome-draw .gal-match-score{color:var(--accent2)}
-.gal-outcome-pending .gal-match-score{color:var(--muted)}
+/* Le match en cours est le seul qui compte en direct : il était le moins visible. */
+.gal-outcome-pending{border-left-color:var(--accent2);background:color-mix(in srgb, var(--accent2) 10%, var(--panel2))}
+.gal-outcome-pending .gal-match-score{color:var(--accent2)}
 
-@media (max-width:760px){
-  .gal-grid{grid-template-columns:1fr}
-}
+.gal-hub-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.gal-hub-row a{color:var(--text);text-decoration:none}
+.gal-hub-row a:hover{color:var(--accent2)}
+.gal-hub-count{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:.75rem}
+.badge.live{color:var(--accent2);border-color:var(--accent2)}
+.badge.bad{color:var(--bad);border-color:var(--bad)}
+
 @media (max-width:420px){
   .gal-stats{flex-wrap:wrap}
   .gal-stat{flex:1 1 40%}
-  .gal-match-row{flex-wrap:wrap}
+  /* Deux lignes lisibles plutôt qu'un flex-wrap qui isole le score. */
+  .gal-match-row{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px}
+  .gal-match-vs{grid-column:1 / -1}
+  .gal-match-score{justify-self:end}
 }
