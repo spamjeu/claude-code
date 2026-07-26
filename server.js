@@ -281,6 +281,8 @@ function findTrackedInStandings(rows) {
           points: row.Points,
           roundName: row.Round,
           decklists: decklistLinks(row.Decklists),
+          status: (row.Team && row.Team.StatusDescription) || null,
+          isActive: row.Team ? !!row.Team.IsActive : null,
         };
       }
     }

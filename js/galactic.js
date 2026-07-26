@@ -7,6 +7,13 @@ window.SWU_TABS.galactic = function initGalactic() {
   const refreshBtn = document.getElementById("galRefresh");
 
   const FR_STATUS = { Registration: "Inscriptions", "In Progress": "En cours", Ended: "Terminé" };
+  // melee.gg's own Team.StatusDescription for a dropped player — translated
+  // for display, raw text kept as a fallback for values not seen yet.
+  const DROP_LABELS = {
+    "Dropped (Self)": "Abandon",
+    "Dropped (TO)": "Retiré par l'organisateur",
+    "Disqualified": "Disqualifié",
+  };
   const baseTitle = document.title;
 
   // Player names, opponent names, round labels, etc. come straight from
@@ -44,9 +51,12 @@ window.SWU_TABS.galactic = function initGalactic() {
     return t.statusDescription === "Ended" || t.status === "finished";
   }
 
-  // Joueur sorti/droppé : moins de matchs que de rondes lancées, et rien en
-  // attente. Son event est fini pour lui même si le tournoi continue.
-  function isPlayerOut({ matches, rounds }) {
+  // Joueur sorti/droppé. melee.gg le dit explicitement sur le classement
+  // (Team.IsActive) — fiable dès qu'un classement a été récupéré après le
+  // drop. Sinon on retombe sur l'heuristique : moins de matchs que de rondes
+  // lancées, et rien en attente.
+  function isPlayerOut({ matches, rounds, standing }) {
+    if (standing && standing.isActive === false) return true;
     return !!(matches && matches.length && rounds && matches.length < rounds
       && matches.every((m) => m.outcome !== "pending"));
   }
@@ -74,9 +84,15 @@ window.SWU_TABS.galactic = function initGalactic() {
       const parts = [];
       if (standing) {
         const ownDeck = decklistLinksHtml(standing.decklists);
+        const dropLabel = standing.isActive === false
+          ? (DROP_LABELS[standing.status] || standing.status || "Abandon")
+          : null;
+        const dropBadge = dropLabel
+          ? ` <span class="badge bad" style="text-transform:none" title="${esc(standing.status || "")}">${esc(dropLabel)}</span>`
+          : "";
         parts.push(`
           <div class="gal-standing">
-            <div class="gal-round-label">Classement — ${esc(standing.roundName)}</div>
+            <div class="gal-round-label">Classement — ${esc(standing.roundName)}${dropBadge}</div>
             <div class="gal-stats">
               <div class="gal-stat"><div class="gal-stat-value">#${esc(standing.rank)}</div><div class="gal-stat-label">Rang</div></div>
               <div class="gal-stat"><div class="gal-stat-value">${esc(standing.matchRecord)}</div><div class="gal-stat-label">Matchs</div></div>
@@ -110,9 +126,12 @@ window.SWU_TABS.galactic = function initGalactic() {
       // Un bloc replié doit rester informatif, sinon la carte n'est plus qu'une
       // liste de titres : rang + record, et surtout la ronde en cours.
       const live = (matches || []).find((m) => m.outcome === "pending");
+      const dropLabel = standing && standing.isActive === false
+        ? (DROP_LABELS[standing.status] || standing.status || "Abandon")
+        : null;
       const summary = [
         standing ? `#${esc(standing.rank)} · ${esc(standing.matchRecord)}` : "",
-        live ? `<span class="gal-live">● ${esc(live.roundName)}</span>` : (playerOut && !isFinished ? `<span class="gal-out">éliminé</span>` : ""),
+        live ? `<span class="gal-live">● ${esc(live.roundName)}</span>` : (playerOut && !isFinished ? `<span class="gal-out">${esc(dropLabel || "éliminé")}</span>` : ""),
       ].filter(Boolean).join(" · ");
       return `<div class="gal-tournament-block${collapsed ? " collapsed" : ""}" data-override-key="${esc(overrideKey)}">
         <div class="gal-tournament-header" role="button" tabindex="0" aria-expanded="${!collapsed}">
