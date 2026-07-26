@@ -216,15 +216,18 @@ function matchesTrackedPlayer(needle, username, displayName) {
   return names.some((n) => n.includes(needle)) ? "partial" : null;
 }
 
-// ResultString reads like "Pecoraban won 2-0-0", "Draw", or "Not reported"
-// (match not finished/reported yet) — pull out the game score and classify
-// the outcome from the tracked player's own side so the UI can color it.
+// ResultString reads like "Pecoraban won 2-0-0", "Draw", "Not reported"
+// (match not finished/reported yet), or "X s'est vu attribuer un bye" /
+// "X was awarded a bye" — pull out the game score and classify the outcome
+// from the tracked player's own side so the UI can color it. A bye counts
+// as a round win in melee.gg standings, so it's classified as "win".
 function parseResult(resultString, ownUsername, ownDisplayName) {
   const raw = resultString || "";
   const score = (raw.match(/\d+-\d+-\d+/) || [])[0] || null;
   const lower = raw.toLowerCase();
   let outcome = "pending";
   if (lower.includes("not reported")) outcome = "pending";
+  else if (lower.includes("bye")) outcome = "win";
   else if (lower.startsWith("draw")) outcome = "draw";
   else if (lower.includes("won")) {
     const ownLower = [ownUsername, ownDisplayName].filter(Boolean).map((s) => s.toLowerCase());
