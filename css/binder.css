@@ -16,6 +16,10 @@
   background-size:10px 34px;background-repeat:repeat-y;background-position:center top;
   border-left:1px solid var(--border);border-right:1px solid var(--border);
 }
+/* Pages du reste des cartes (portrait) : réduites à 80 %, cf. renderPage()
+   dans js/binder.js. La largeur porte tout — les pochettes gardent leur
+   aspect-ratio, donc la hauteur suit la même réduction. */
+.binder-page.compact{max-width:80%}
 .binder-page-num{
   position:absolute;top:8px;right:12px;font-size:.7rem;color:var(--muted);
 }
@@ -47,4 +51,7 @@
   .binder-grid{gap:6px}
   .binder-page{padding:14px 10px 14px 26px}
   .binder-page::before{left:8px}
+  /* Sur mobile la largeur est déjà la ressource rare : 3 colonnes à 80 %
+     rendraient les cartes illisibles. */
+  .binder-page.compact{max-width:100%}
 }

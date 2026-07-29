@@ -103,7 +103,12 @@
 
   function renderPage(pageSlots, pageNumber){
     const pageEl = document.createElement("div");
-    pageEl.className = "binder-page";
+    // Les pages de leaders / bases sont en paysage, donc déjà basses. Celles du
+    // reste des cartes sont en portrait : à pleine largeur elles font le double
+    // de haut et le défilement devient interminable. On les rend à 80 %, calées
+    // à gauche pour que la reliure reste alignée d'une page à l'autre.
+    const compact = !pageSlots[0].landscape;
+    pageEl.className = "binder-page" + (compact ? " compact" : "");
 
     const pageNum = document.createElement("div");
     pageNum.className = "binder-page-num";
