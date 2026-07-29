@@ -528,31 +528,61 @@ function cardRef(card) {
 // the resolved value — concurrent lookups for the same not-yet-cached set
 // share one fetch instead of each kicking off their own. Used both for
 // aspect lookups (deck sync) and for the binder tab's full-set card list.
+// Liste blanche : `set` arrive du client (query string de /api/cards/set) et
+// sert à la fois de segment d'URL upstream et de clé de cache. Sans elle, une
+// boucle sur ?set=<aléatoire> ferait grossir setCardsCache indéfiniment (une
+// entrée + un fetch de 6-14 s par valeur inédite) et laisserait injecter un
+// chemin arbitraire sur api.swu-db.com via des "..". Doublon assumé de
+// window.SWU.SETS (js/common.js) : le client ne peut pas valider pour nous.
+const KNOWN_SETS = new Set(["sor", "shd", "twi", "jtl", "lof", "sec", "law", "ash"]);
+
 const setCardsCache = new Map();
 
 function getSetCards(set) {
   const key = set.toLowerCase();
+  if (!KNOWN_SETS.has(key)) return Promise.reject(new Error(`Set inconnu : ${set}`));
   if (setCardsCache.has(key)) return setCardsCache.get(key);
-  const promise = (async () => {
-    try {
-      const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
-      return data.data || [];
-    } catch (err) {
-      console.error(`Could not load cards for set ${set}: ${err.message}`);
-      return [];
-    }
-  })();
+  const promise = httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`)
+    .then((data) => data.data || [])
+    .catch((err) => {
+      // Un échec ne doit surtout pas être mémorisé : la valeur cachée l'est
+      // pour toute la vie du process, donc une panne réseau au premier appel
+      // figerait ce set sur "vide" jusqu'au redémarrage du serveur.
+      setCardsCache.delete(key);
+      throw err;
+    });
   setCardsCache.set(key, promise);
   return promise;
 }
 
 // swudb.com's own API only exposes aspects as undocumented numeric codes, so
 // aspects are resolved from the official api.swu-db.com data instead.
+// Les aspects ne sont qu'un enrichissement du sync de decks : un set qu'on
+// n'arrive pas à charger vaut "pas d'aspects", pas un sync qui échoue.
 async function getSetAspects(set) {
-  const cards = await getSetCards(set);
+  let cards = [];
+  try {
+    cards = await getSetCards(set);
+  } catch (err) {
+    console.error(`Could not load aspects for set ${set}: ${err.message}`);
+  }
   const map = new Map();
   for (const c of cards) map.set(c.Number, c.Aspects || []);
   return map;
+}
+
+// L'onglet Classeur n'affiche qu'une image et une légende : renvoyer les
+// objets cartes complets (~155 Ko pour un set) pour n'en exploiter que cinq
+// champs multiplierait par ~4,5 la bande passante et le JSON.parse à chaque
+// changement de set.
+function binderCard(card) {
+  return {
+    Number: card.Number,
+    Name: card.Name,
+    Subtitle: card.Subtitle || "",
+    Type: card.Type,
+    FrontArt: card.FrontArt || "",
+  };
 }
 
 async function resolveAspects(ref) {
@@ -970,18 +1000,26 @@ function handleRequest(req, res) {
     return;
   }
 
+  // Liste des cartes d'un set pour l'onglet Classeur. Contrat de la route :
+  // une seule version par carte (la "Normal" — pas les foil/hyperspace/showcase,
+  // qui sont la même carte avec un autre numéro), triée par numéro de collection.
+  // L'API amont, elle, trie par nom : sans ce tri le classeur sortirait dans
+  // l'ordre alphabétique au lieu de l'ordre du set.
   if (url.pathname === "/api/cards/set") {
     const set = (url.searchParams.get("set") || "").trim();
-    if (!set) {
+    if (!KNOWN_SETS.has(set.toLowerCase())) {
       res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "Paramètre 'set' manquant." }));
+      res.end(JSON.stringify({ error: `Set inconnu : ${set}` }));
       return;
     }
     getSetCards(set)
       .then((cards) => {
-        const normal = cards.filter((c) => c.VariantType === "Normal");
+        const pockets = cards
+          .filter((c) => c.VariantType === "Normal")
+          .map(binderCard)
+          .sort((a, b) => a.Number.localeCompare(b.Number));
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ cards: normal }));
+        res.end(JSON.stringify({ cards: pockets }));
       })
       .catch((err) => {
         res.writeHead(502, { "content-type": "application/json" });

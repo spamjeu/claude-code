@@ -26,14 +26,22 @@
   position:relative;aspect-ratio:5/7;border-radius:5px;overflow:hidden;
   background:var(--panel2);border:1px solid var(--border);
 }
+/* Leaders et bases sont des cartes paysage (cf. LANDSCAPE_TYPES dans
+   js/binder.js, et #cardPreview.landscape dans css/decks.css). */
+.binder-pocket.landscape{aspect-ratio:7/5}
 .binder-pocket img{width:100%;height:100%;object-fit:cover;display:block}
 .binder-pocket.empty{border-style:dashed;opacity:.45}
+.binder-pocket .noart{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:.8rem;font-family:var(--mono);
+}
 .binder-pocket .cap{
   position:absolute;left:0;right:0;bottom:0;padding:3px 5px;font-size:.62rem;line-height:1.15;
   background:linear-gradient(to top, rgba(0,0,0,.75), transparent);color:#fff;
   opacity:0;transition:opacity .15s;
 }
-.binder-pocket:hover .cap{opacity:1}
+.binder-pocket:hover .cap,
+.binder-pocket:focus-within .cap{opacity:1}
 
 @media (max-width:640px){
   .binder-grid{gap:6px}

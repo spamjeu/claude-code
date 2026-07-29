@@ -213,6 +213,8 @@ window.SWU_TABS.cards = function initCardsTab(){
   resultsEl = $("#results");
   statusEl = $("#status");
 
+  window.SWU.fillSetOptions($("#set"), "ash");
+
   document.querySelectorAll("#aspectPicker button").forEach((btn) => {
     btn.addEventListener("click", () => setAspect(btn.dataset.value));
   });

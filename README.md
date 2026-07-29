@@ -66,7 +66,38 @@ en **dollars** (source TCGPlayer, marketplace américain), pas un prix garanti
 ni une conversion en euros. Le tableau affiche le "prix marché" ; le détail
 (prix bas + prix marché) est visible en survolant la valeur.
 
+## Classeur (onglet "Classeur")
+
+Simule un classeur physique **9 pochettes par page** pour chaque extension, afin
+de préparer le rangement de ses cartes. L'ordre suit celui du set, avec un saut
+de page à chaque changement de groupe :
+
+1. les **leaders**, puis
+2. les **bases**, qui démarrent sur une nouvelle page, puis
+3. **le reste des cartes** (unités / améliorations / événements), qui démarre
+   également sur une nouvelle page.
+
+Les pochettes restantes en fin de groupe sont affichées en pointillés, pour que
+chaque page ait bien ses 9 emplacements comme dans un vrai classeur. Une seule
+version de chaque carte est présentée (la version "Normal" — ni foil, ni
+hyperspace, ni showcase, qui sont la même carte sous un autre numéro).
+
+Côté serveur, `/api/cards/set?set=<code>` récupère le set via api.swu-db.com
+(mis en cache pour la durée du process, le premier appel prend une dizaine de
+secondes), le réduit aux seuls champs affichés et le **trie par numéro de
+collection** : l'API amont, elle, trie par nom, donc sans ce tri le classeur
+sortirait dans l'ordre alphabétique. La liste des extensions est partagée entre
+les onglets via `window.SWU.SETS` (`js/common.js`), et validée côté serveur par
+`KNOWN_SETS` (`server.js`).
+
 ## Suivi Galactic Championship (onglet "Galactic")
+
+> **Onglet actuellement masqué.** Le bouton d'onglet et son panneau ont été
+> retirés de `index.html`, mais tout le reste est intact (`partials/galactic.html`,
+> `js/galactic.js`, `css/galactic.css` et le polling melee.gg dans `server.js`,
+> qui tourne toujours). Pour le réafficher, il suffit de remettre le bouton
+> `<button class="tab" data-tab="galactic">` et la section
+> `<section class="tabpanel" data-tabpanel="galactic">` dans `index.html`.
 
 Cet onglet suit automatiquement 3 pseudos (configurés en dur dans `server.js`,
 constante `MELEE_TRACKED_PLAYERS`) à travers les 5 tournois du
@@ -117,3 +148,6 @@ Pour des stats de méta plus larges (sans devoir importer toi-même) :
 - Le mapping des champs JSON (`Name`, `Text`, image, etc.) est fait de façon tolérante
   (recherche de clés approchantes) car le schéma exact de l'API cartes n'est pas
   garanti stable ; si un champ manque, regarde le "JSON brut" du résultat concerné.
+- L'onglet Classeur regroupe les cartes sur le champ `Type` de l'API (`Leader`,
+  `Base`, puis le reste) : si l'API renommait ces valeurs, tout se retrouverait
+  dans le groupe "Cartes" sans erreur visible.

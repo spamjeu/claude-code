@@ -24,6 +24,33 @@ themeToggleBtn.addEventListener("click", () => {
 // onglets séparément mais affichée avec le même format des deux côtés.
 window.SWU = {
   statsSeasonStart: null,
+
+  // Les sets SWU, du plus récent au plus ancien. Partagé entre l'onglet
+  // Recherche et l'onglet Classeur, qui remplissent tous les deux leur <select>
+  // à partir d'ici : sans build step, un set ajouté à un seul des deux endroits
+  // laisserait l'autre onglet silencieusement en retard d'une extension.
+  // server.js garde sa propre copie (KNOWN_SETS) pour valider ce qu'il reçoit.
+  SETS: [
+    { code: "ash", label: "Ashes of the Empire (ASH)" },
+    { code: "law", label: "A Lawless Time (LAW)" },
+    { code: "sec", label: "Secrets of Power (SEC)" },
+    { code: "lof", label: "Legends of the Force (LOF)" },
+    { code: "jtl", label: "Jump to Lightspeed (JTL)" },
+    { code: "twi", label: "Twilight of the Republic (TWI)" },
+    { code: "shd", label: "Shadows of the Galaxy (SHD)" },
+    { code: "sor", label: "Spark of Rebellion (SOR)" },
+  ],
+  // Ajoute une <option> par set au <select> donné, en gardant celles déjà
+  // présentes dans le HTML (l'onglet Recherche y a un "Tous les sets" en tête).
+  fillSetOptions(selectEl, selectedCode){
+    for (const { code, label } of this.SETS){
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = label;
+      opt.selected = code === selectedCode;
+      selectEl.appendChild(opt);
+    }
+  },
   formatFrDate(iso){
     if (!iso) return "";
     return new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" });
