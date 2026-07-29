@@ -1,0 +1,42 @@
+#binderPages{display:flex;flex-direction:column;gap:22px;padding-top:4px}
+
+.binder-section-label{
+  font:800 .8rem/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent);margin:0 2px 2px;
+}
+
+.binder-page{
+  position:relative;background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:16px 16px 16px 34px;box-shadow:0 2px 10px rgba(0,0,0,.15);
+}
+.binder-page::before{
+  /* Colonne d'anneaux de classeur sur le bord gauche de la page. */
+  content:"";position:absolute;top:14px;bottom:14px;left:12px;width:10px;
+  background-image:radial-gradient(circle, var(--bg) 3px, transparent 3.5px);
+  background-size:10px 34px;background-repeat:repeat-y;background-position:center top;
+  border-left:1px solid var(--border);border-right:1px solid var(--border);
+}
+.binder-page-num{
+  position:absolute;top:8px;right:12px;font-size:.7rem;color:var(--muted);
+}
+
+.binder-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+
+.binder-pocket{
+  position:relative;aspect-ratio:5/7;border-radius:5px;overflow:hidden;
+  background:var(--panel2);border:1px solid var(--border);
+}
+.binder-pocket img{width:100%;height:100%;object-fit:cover;display:block}
+.binder-pocket.empty{border-style:dashed;opacity:.45}
+.binder-pocket .cap{
+  position:absolute;left:0;right:0;bottom:0;padding:3px 5px;font-size:.62rem;line-height:1.15;
+  background:linear-gradient(to top, rgba(0,0,0,.75), transparent);color:#fff;
+  opacity:0;transition:opacity .15s;
+}
+.binder-pocket:hover .cap{opacity:1}
+
+@media (max-width:640px){
+  .binder-grid{gap:6px}
+  .binder-page{padding:14px 10px 14px 26px}
+  .binder-page::before{left:8px}
+}

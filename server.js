@@ -522,30 +522,37 @@ function cardRef(card) {
   };
 }
 
-// swudb.com's own API only exposes aspects as undocumented numeric codes, so
-// aspects are resolved from the official api.swu-db.com data instead (one
-// fetch per set, cached for the process lifetime, keyed by card number).
-// api.swu-db.com's per-set endpoint is very slow (6-14s observed) so the
-// cache stores the in-flight *promise*, not just the resolved value —
-// concurrent lookups for the same not-yet-cached set share one fetch instead
-// of each kicking off their own.
-const setAspectsCache = new Map();
+// api.swu-db.com's per-set endpoint is very slow (6-14s observed), so the
+// full card list for a set is fetched once and cached for the process
+// lifetime, keyed by set. The cache stores the in-flight *promise*, not just
+// the resolved value — concurrent lookups for the same not-yet-cached set
+// share one fetch instead of each kicking off their own. Used both for
+// aspect lookups (deck sync) and for the binder tab's full-set card list.
+const setCardsCache = new Map();
 
-function getSetAspects(set) {
+function getSetCards(set) {
   const key = set.toLowerCase();
-  if (setAspectsCache.has(key)) return setAspectsCache.get(key);
+  if (setCardsCache.has(key)) return setCardsCache.get(key);
   const promise = (async () => {
-    const map = new Map();
     try {
       const data = await httpsGetJson(`https://api.swu-db.com/cards/${key}?format=json`);
-      for (const c of data.data || []) map.set(c.Number, c.Aspects || []);
+      return data.data || [];
     } catch (err) {
-      console.error(`Could not load aspects for set ${set}: ${err.message}`);
+      console.error(`Could not load cards for set ${set}: ${err.message}`);
+      return [];
     }
-    return map;
   })();
-  setAspectsCache.set(key, promise);
+  setCardsCache.set(key, promise);
   return promise;
+}
+
+// swudb.com's own API only exposes aspects as undocumented numeric codes, so
+// aspects are resolved from the official api.swu-db.com data instead.
+async function getSetAspects(set) {
+  const cards = await getSetCards(set);
+  const map = new Map();
+  for (const c of cards) map.set(c.Number, c.Aspects || []);
+  return map;
 }
 
 async function resolveAspects(ref) {
@@ -960,6 +967,26 @@ function handleRequest(req, res) {
       res.writeHead(502, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: `Upstream request failed: ${err.message}` }));
     });
+    return;
+  }
+
+  if (url.pathname === "/api/cards/set") {
+    const set = (url.searchParams.get("set") || "").trim();
+    if (!set) {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Paramètre 'set' manquant." }));
+      return;
+    }
+    getSetCards(set)
+      .then((cards) => {
+        const normal = cards.filter((c) => c.VariantType === "Normal");
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ cards: normal }));
+      })
+      .catch((err) => {
+        res.writeHead(502, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      });
     return;
   }
 
