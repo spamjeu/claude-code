@@ -154,6 +154,50 @@ function highlight(text, term){
   }catch{ return text; }
 }
 
+// Tri des résultats, côté client : l'API amont ne renvoie que son ordre à
+// elle (alphabétique). Les résultats sont gardés ici pour pouvoir retrier sans
+// relancer une requête.
+let lastCards = [];
+let lastTerm = "";
+
+// Ordre canonique des aspects SWU (celui des cartes et du site officiel),
+// pas l'ordre alphabétique.
+const ASPECT_ORDER = ["vigilance","command","aggression","cunning","heroism","villainy"];
+
+function aspectSortKey(card){
+  const aspects = pick(card, ["Aspects","aspects"]);
+  const list = Array.isArray(aspects) ? aspects : (aspects ? [aspects] : []);
+  if (!list.length) return "99"; // les cartes sans aspect finissent en dernier
+  // Les aspects d'une carte sont triés entre eux avant d'être concaténés :
+  // Command+Heroism et Heroism+Command sont la même paire et doivent se
+  // retrouver côte à côte.
+  return list
+    .map((a) => String(ASPECT_ORDER.indexOf(String(a).toLowerCase())).padStart(2, "0"))
+    .sort()
+    .join("-");
+}
+
+function numOr(card, patterns, fallback){
+  const v = parseInt(pick(card, patterns), 10);
+  return Number.isNaN(v) ? fallback : v;
+}
+
+function cardName(card){ return String(pick(card, ["Name","name"]) || ""); }
+
+const SORTS = {
+  "": null, // ordre renvoyé par l'API
+  "aspect": (a,b) => aspectSortKey(a).localeCompare(aspectSortKey(b)) || cardName(a).localeCompare(cardName(b)),
+  "cost": (a,b) => numOr(a,["Cost","cost"],99) - numOr(b,["Cost","cost"],99) || cardName(a).localeCompare(cardName(b)),
+  "name": (a,b) => cardName(a).localeCompare(cardName(b)),
+  "setnum": (a,b) => String(pick(a,["Set","set"])||"").localeCompare(String(pick(b,["Set","set"])||""))
+    || numOr(a,["Number","number","CardNumber"],0) - numOr(b,["Number","number","CardNumber"],0),
+};
+
+function sortCards(cards){
+  const cmp = SORTS[$("#sort").value];
+  return cmp ? [...cards].sort(cmp) : cards;
+}
+
 async function search(){
   const query = buildQuery();
   const termForHighlight = $("#q").value.trim().replace(/^raw:/,'');
@@ -177,7 +221,9 @@ async function search(){
       return;
     }
     statusEl.textContent = `${cards.length} carte(s) trouvée(s) — q=${query}`;
-    render(cards, termForHighlight);
+    lastCards = cards;
+    lastTerm = termForHighlight;
+    render(sortCards(cards), termForHighlight);
   }catch(err){
     statusEl.className = "status err";
     statusEl.textContent = `Erreur de requête vers l'API (${err.message}). ` +
@@ -249,6 +295,10 @@ window.SWU_TABS.cards = function initCardsTab(){
   for (const sel of ["#costMin", "#costMax"]){
     $(sel).addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
   }
+  // Changer le tri retrie ce qui est déjà affiché, sans rappeler l'API.
+  $("#sort").addEventListener("change", ()=>{
+    if (lastCards.length) render(sortCards(lastCards), lastTerm);
+  });
 
   loadCardStats();
 };
