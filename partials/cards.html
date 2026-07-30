@@ -1,10 +1,6 @@
 <section class="panel">
   <div class="row">
     <input id="q" type="text" placeholder='Nom ou texte à chercher, ex: advantage ou Sabine' />
-    <!-- Les sets sont ajoutés par window.SWU.fillSetOptions() (js/common.js). -->
-    <select id="set">
-      <option value="">Tous les sets</option>
-    </select>
     <select id="type">
       <option value="">Tous les types</option>
       <option value="unit">Unit</option>
@@ -13,10 +9,19 @@
       <option value="leader">Leader</option>
       <option value="base">Base</option>
     </select>
+    <label class="costfilter">Coût
+      <input id="costMin" type="number" min="0" max="20" step="1" placeholder="min" />
+      <span>→</span>
+      <input id="costMax" type="number" min="0" max="20" step="1" placeholder="max" />
+    </label>
     <button class="primary" id="go">Rechercher</button>
   </div>
   <div class="row" style="margin-top:10px">
-    <input type="hidden" id="aspect" value="" />
+    <!-- Les cases à cocher sont ajoutées par window.SWU.fillSetCheckboxes() (js/common.js).
+         Aucune cochée = tous les sets. -->
+    <div id="setPicker"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
     <input type="hidden" id="arena" value="" />
     <div id="aspectPicker">
       <button type="button" class="selected" data-value="">Tous les aspects</button>
@@ -36,6 +41,8 @@
     <button class="chip" data-preset="event">⚡ Event</button>
   </div>
   <div class="hint">
+    Les filtres se cumulent : plusieurs sets cochés = l'un ou l'autre, plusieurs aspects = tous à la fois,
+    et les boutons rapides ci-dessus ne remettent à zéro ni les sets, ni les aspects, ni le coût.<br />
     Syntaxe libre supportée (transmise telle quelle à l'API si tu préfixes ta recherche par <code>raw:</code>) :
     <code>t:</code> texte, <code>ty:</code> type, <code>a:</code> aspect, <code>ar:</code> arena, <code>r:</code> rareté,
     <code>set:</code> set, <code>c=</code>/<code>p=</code>/<code>h=</code> coût/power/HP, <code>AND</code>/<code>OR</code>, parenthèses.

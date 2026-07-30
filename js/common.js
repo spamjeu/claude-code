@@ -51,6 +51,21 @@ window.SWU = {
       selectEl.appendChild(opt);
     }
   },
+  // Variante multi-sélection de fillSetOptions() pour l'onglet Recherche :
+  // une case à cocher par set, aucune cochée = pas de filtre set.
+  fillSetCheckboxes(containerEl, checkedCodes = []){
+    for (const { code, label } of this.SETS){
+      const wrap = document.createElement("label");
+      wrap.className = "setbox";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = code;
+      box.checked = checkedCodes.includes(code);
+      wrap.appendChild(box);
+      wrap.appendChild(document.createTextNode(label));
+      containerEl.appendChild(wrap);
+    }
+  },
   formatFrDate(iso){
     if (!iso) return "";
     return new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", { timeZone: "UTC" });

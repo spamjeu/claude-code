@@ -5,6 +5,15 @@
 const API = "/api/cards/search";
 let resultsEl, statusEl;
 
+// Aspects sélectionnés, cumulables : plusieurs aspects donnent un ET (une
+// carte Vigilance+Héroïsme, pas "Vigilance ou Héroïsme"), ce qui correspond à
+// la façon dont une carte SWU porte ses aspects.
+const selectedAspects = new Set();
+
+function selectedSets(){
+  return [...document.querySelectorAll("#setPicker input:checked")].map((b) => b.value);
+}
+
 function buildQuery(){
   const raw = $("#q").value.trim();
   if (raw.startsWith("raw:")) return raw.slice(4).trim();
@@ -14,33 +23,42 @@ function buildQuery(){
     const term = raw.replace(/"/g,'');
     parts.push(`(t:"${term}" OR "${term}")`);
   }
-  const set = $("#set").value;
-  if (set) parts.push(`set:${set}`);
+  const sets = selectedSets();
+  if (sets.length) parts.push(`(${sets.map((s) => `set:${s}`).join(" OR ")})`);
   const type = $("#type").value;
   if (type) parts.push(`ty:${type}`);
-  const aspect = $("#aspect").value;
-  if (aspect) parts.push(`a:${aspect}`);
+  for (const aspect of selectedAspects) parts.push(`a:${aspect}`);
   const arena = $("#arena").value;
   if (arena) parts.push(`ar:${arena}`);
+  // Coût : les deux bornes sont indépendantes, on n'envoie que celles saisies.
+  const costMin = $("#costMin").value.trim();
+  const costMax = $("#costMax").value.trim();
+  if (costMin !== "") parts.push(`c>=${Number(costMin)}`);
+  if (costMax !== "") parts.push(`c<=${Number(costMax)}`);
   return parts.join(" AND ");
 }
 
-function setAspect(value){
-  $("#aspect").value = value;
+// Un clic sur un aspect l'ajoute/le retire ; "Tous les aspects" (data-value
+// vide) vide la sélection.
+function toggleAspect(value){
+  if (!value) selectedAspects.clear();
+  else if (selectedAspects.has(value)) selectedAspects.delete(value);
+  else selectedAspects.add(value);
   document.querySelectorAll("#aspectPicker button").forEach((b) => {
-    b.classList.toggle("selected", b.dataset.value === value);
+    const v = b.dataset.value;
+    b.classList.toggle("selected", v ? selectedAspects.has(v) : selectedAspects.size === 0);
   });
 }
 
-// Filtres rapides par type/arène. Le Set choisi (ASH par défaut) n'est pas
-// touché : ces boutons filtrent dans le contexte déjà sélectionné plutôt que
-// de le réinitialiser.
+// Filtres rapides par type/arène. Ni les sets cochés, ni les aspects, ni le
+// coût ne sont touchés : ces boutons filtrent dans le contexte déjà
+// sélectionné plutôt que de le réinitialiser.
 const PRESETS = {
-  "leader": () => { $("#q").value = ""; $("#type").value = "leader"; $("#arena").value = ""; setAspect(""); },
-  "ground": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "ground"; setAspect(""); },
-  "space": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "space"; setAspect(""); },
-  "upgrade": () => { $("#q").value = ""; $("#type").value = "upgrade"; $("#arena").value = ""; setAspect(""); },
-  "event": () => { $("#q").value = ""; $("#type").value = "event"; $("#arena").value = ""; setAspect(""); },
+  "leader": () => { $("#q").value = ""; $("#type").value = "leader"; $("#arena").value = ""; },
+  "ground": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "ground"; },
+  "space": () => { $("#q").value = ""; $("#type").value = "unit"; $("#arena").value = "space"; },
+  "upgrade": () => { $("#q").value = ""; $("#type").value = "upgrade"; $("#arena").value = ""; },
+  "event": () => { $("#q").value = ""; $("#type").value = "event"; $("#arena").value = ""; },
 };
 
 function pick(obj, patterns){
@@ -137,7 +155,7 @@ async function search(){
   resultsEl.innerHTML = "";
   if (!query){
     statusEl.className = "status";
-    statusEl.textContent = "Saisis un texte ou choisis un filtre (set / type / aspect) avant de rechercher.";
+    statusEl.textContent = "Saisis un texte ou choisis un filtre (set / type / aspect / coût) avant de rechercher.";
     return;
   }
   statusEl.className = "status";
@@ -213,16 +231,19 @@ window.SWU_TABS.cards = function initCardsTab(){
   resultsEl = $("#results");
   statusEl = $("#status");
 
-  window.SWU.fillSetOptions($("#set"), "ash");
+  window.SWU.fillSetCheckboxes($("#setPicker"), ["ash"]);
 
   document.querySelectorAll("#aspectPicker button").forEach((btn) => {
-    btn.addEventListener("click", () => setAspect(btn.dataset.value));
+    btn.addEventListener("click", () => toggleAspect(btn.dataset.value));
   });
   document.querySelectorAll("[data-preset]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ PRESETS[btn.dataset.preset](); search(); });
   });
   $("#go").addEventListener("click", search);
   $("#q").addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+  for (const sel of ["#costMin", "#costMax"]){
+    $(sel).addEventListener("keydown", (e)=>{ if(e.key==="Enter") search(); });
+  }
 
   loadCardStats();
 };
