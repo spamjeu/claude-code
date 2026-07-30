@@ -23,8 +23,11 @@ function buildQuery(){
     const term = raw.replace(/"/g,'');
     parts.push(`(t:"${term}" OR "${term}")`);
   }
+  // Un seul set n'est PAS parenthésé : l'API amont renvoie une 502 sur un
+  // groupe à terme unique — "(set:ash)" casse, "set:ash" passe.
   const sets = selectedSets();
-  if (sets.length) parts.push(`(${sets.map((s) => `set:${s}`).join(" OR ")})`);
+  if (sets.length === 1) parts.push(`set:${sets[0]}`);
+  else if (sets.length) parts.push(`(${sets.map((s) => `set:${s}`).join(" OR ")})`);
   const type = $("#type").value;
   if (type) parts.push(`ty:${type}`);
   for (const aspect of selectedAspects) parts.push(`a:${aspect}`);
