@@ -34,10 +34,12 @@ function buildQuery(){
   const arena = $("#arena").value;
   if (arena) parts.push(`ar:${arena}`);
   // Coût : les deux bornes sont indépendantes, on n'envoie que celles saisies.
-  const costMin = $("#costMin").value.trim();
-  const costMax = $("#costMax").value.trim();
-  if (costMin !== "") parts.push(`c>=${Number(costMin)}`);
-  if (costMax !== "") parts.push(`c<=${Number(costMax)}`);
+  // Champs libres, donc on ne garde que les chiffres et on ignore le reste
+  // plutôt que d'envoyer "c>=NaN" à l'API.
+  const costMin = $("#costMin").value.replace(/\D/g, "");
+  const costMax = $("#costMax").value.replace(/\D/g, "");
+  if (costMin !== "") parts.push(`c>=${costMin}`);
+  if (costMax !== "") parts.push(`c<=${costMax}`);
   return parts.join(" AND ");
 }
 

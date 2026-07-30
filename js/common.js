@@ -52,17 +52,20 @@ window.SWU = {
     }
   },
   // Variante multi-sélection de fillSetOptions() pour l'onglet Recherche :
-  // une case à cocher par set, aucune cochée = pas de filtre set.
+  // une case à cocher par set, aucune cochée = pas de filtre set. On n'affiche
+  // que le code du set (ASH, LAW…) pour tenir sur une ligne ; le nom complet
+  // reste accessible en infobulle.
   fillSetCheckboxes(containerEl, checkedCodes = []){
     for (const { code, label } of this.SETS){
       const wrap = document.createElement("label");
       wrap.className = "setbox";
+      wrap.title = label;
       const box = document.createElement("input");
       box.type = "checkbox";
       box.value = code;
       box.checked = checkedCodes.includes(code);
       wrap.appendChild(box);
-      wrap.appendChild(document.createTextNode(label));
+      wrap.appendChild(document.createTextNode(code.toUpperCase()));
       containerEl.appendChild(wrap);
     }
   },
