@@ -113,30 +113,12 @@ les onglets via `window.SWU.SETS` (`js/common.js`), et validée côté serveur p
 ## Suivi de tournoi melee.gg (onglet "Tournoi")
 
 Cet onglet suit automatiquement une liste de pseudos (configurés en dur dans
-`server.js`, constante `MELEE_TRACKED_PLAYERS`) à travers un tournoi melee.gg :
-classement, round en cours, adversaire, table.
-
-Le tournoi suivi se choisit dans l'interface ("🎯 Changer de tournoi") parmi
-les **tournois Star Wars: Unlimited du jour**, triés par nombre de joueurs. Le
-choix est persisté dans `data/galactic.json` (`tracked`) et survit au
-redémarrage ; `MELEE_TOURNAMENTS` n'en est plus que la valeur initiale.
-Changer de tournoi jette les données de l'ancien — elles ne concernent plus ce
-qu'on regarde — et déclenche une récupération immédiate.
-
-La liste vient de `/Tournament/TournamentSearch`, la recherche globale de
-melee.gg, avec trois pièges trouvés en rejouant ses appels :
-
-- l'enveloppe DataTables n'est pas à la racine mais imbriquée sous
-  `variables` — à plat, l'endpoint répond 500 ;
-- les colonnes doivent porter exactement les noms déclarés dans son JS
-  (`startDate`, `name`, `game`…), sinon 500 également ;
-- `variables[search][value]` ne filtre rien (réponse vide), d'où le filtrage
-  sur la date du jour fait côté serveur.
-
-Les deux statuts sont interrogés (`Started` **et** `NotStarted`) : un tournoi
-du jour peut n'avoir pas encore lancé sa ronde 1. Sans la borne "aujourd'hui",
-la liste serait inutilisable — melee.gg compte ~420 tournois SWU "en cours",
-essentiellement des weeklies que personne n'a jamais clôturées.
+`server.js`, constante `MELEE_TRACKED_PLAYERS`) à travers un ou plusieurs
+tournois melee.gg (constante `MELEE_TOURNAMENTS`, une liste `{ id, label }` —
+chaque tournoi est autonome, pas besoin qu'ils appartiennent à un même Hub) :
+classement, round en cours, adversaire, table. Actuellement suivi : le
+[PQ Strasbourg (Philibert)](https://melee.gg/Tournament/View/443936) du
+01/08/2026.
 
 L'affichage est en **deux colonnes** sur écran large (≥ 900px) :
 

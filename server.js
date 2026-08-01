@@ -62,8 +62,6 @@ const ASH_SEASON_START_ISO = new Date(ASH_RELEASE_DATE_MS).toISOString().slice(0
 // (cf. extractTournamentHeadline) plutôt que via l'API de recherche d'un Hub.
 const MELEE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const MELEE_REFERER = "https://melee.gg/";
-// Tournoi(s) suivis par défaut, au premier démarrage : ensuite c'est le choix
-// fait dans l'interface qui prime (persisté dans data/galactic.json).
 const MELEE_TOURNAMENTS = [
   { id: 443936, label: "PQ Strasbourg (Philibert)" },
 ];
@@ -135,98 +133,6 @@ function dataTablesEnvelope(extra) {
     "order[0][column]": "0", "order[0][dir]": "asc",
     ...extra,
   };
-}
-
-// Recherche globale de tournois (celle de melee.gg/Tournament/Index), pour
-// pouvoir choisir le tournoi suivi depuis l'interface plutôt qu'en éditant
-// MELEE_TOURNAMENTS. Trois particularités de cet endpoint, trouvées en
-// rejouant ses appels :
-//   - l'enveloppe DataTables n'est pas à la racine mais imbriquée sous
-//     "variables" ; à plat, il répond 500 ;
-//   - ses colonnes doivent porter exactement les noms déclarés dans son JS
-//     (startDate, name, game, ...), sinon 500 également ;
-//   - "variables[search][value]" ne filtre rien : il renvoie une réponse vide.
-//     D'où le filtrage par nom fait ici, sur la liste complète.
-// Les filtres utiles sont des étiquettes : le jeu ("StarWarsUnlimited") et le
-// statut ("Started" / "NotStarted" / "Ended").
-const MELEE_SEARCH_COLUMNS = ["startDate", "name", "game", "organizationName", "status",
-  "registrationType", "entryFeeString", "enrolledPlayerCount", "tags"];
-
-async function meleeSearchTournaments(statusFilter) {
-  const p = new URLSearchParams();
-  p.append("ordering", "PlayersHighToLow");
-  p.append("mode", "Table");
-  p.append("filters[]", statusFilter);
-  p.append("filters[]", "StarWarsUnlimited");
-  p.append("variables[draw]", "1");
-  p.append("variables[start]", "0");
-  // Un seul appel suffit : ~420 tournois SWU "en cours" au total, très loin
-  // du plafond de 500 lignes par réponse.
-  p.append("variables[length]", "500");
-  p.append("variables[search][value]", "");
-  p.append("variables[search][regex]", "false");
-  p.append("variables[order][0][column]", "7");
-  p.append("variables[order][0][dir]", "desc");
-  MELEE_SEARCH_COLUMNS.forEach((c, i) => {
-    p.append(`variables[columns][${i}][data]`, c);
-    p.append(`variables[columns][${i}][name]`, "");
-    p.append(`variables[columns][${i}][searchable]`, "true");
-    p.append(`variables[columns][${i}][orderable]`, "true");
-    p.append(`variables[columns][${i}][search][value]`, "");
-    p.append(`variables[columns][${i}][search][regex]`, "false");
-  });
-  const body = p.toString();
-  const { status, body: respBody } = await httpsRequest("https://melee.gg/Tournament/TournamentSearch", {
-    method: "POST",
-    headers: meleeHeaders({
-      "x-requested-with": "XMLHttpRequest",
-      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "content-length": Buffer.byteLength(body),
-    }),
-    body,
-  });
-  if (status !== 200) throw new Error(`melee.gg TournamentSearch -> HTTP ${status}`);
-  const data = JSON.parse(respBody);
-  if (data.Error) throw new Error(data.Message || "melee.gg TournamentSearch a répondu une erreur");
-  return data.data || [];
-}
-
-// Le menu ne propose que les tournois du jour. "En cours" au sens de melee.gg
-// compte sinon tout tournoi qu'un organisateur n'a jamais clôturé — des
-// centaines de weeklies mortes depuis des mois — et "inscriptions ouvertes"
-// ratisse des mois à l'avance.
-//
-// Les deux statuts sont interrogés : un tournoi du jour peut n'avoir pas
-// encore lancé sa ronde 1 (donc "Registration") au moment où on le cherche.
-const MELEE_LIST_CACHE_MS = 5 * 60 * 1000;
-let tournamentListCache = null;
-
-function isToday(startDate) {
-  return new Date(startDate).toDateString() === new Date().toDateString();
-}
-
-async function listMeleeTournaments() {
-  if (tournamentListCache && Date.now() - tournamentListCache.fetchedAt < MELEE_LIST_CACHE_MS) {
-    return tournamentListCache.tournaments;
-  }
-  const rows = [];
-  for (const status of ["Started", "NotStarted"]) {
-    rows.push(...await meleeSearchTournaments(status));
-    await sleep(MELEE_REQUEST_DELAY_MS);
-  }
-  const tournaments = rows
-    .filter((t) => isToday(t.startDate))
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      organization: t.organizationName || "",
-      players: t.enrolledPlayerCount,
-      status: t.status,
-    }))
-    // Le plus gros tournoi du jour est presque toujours celui qu'on cherche.
-    .sort((a, b) => (b.players || 0) - (a.players || 0));
-  tournamentListCache = { fetchedAt: Date.now(), tournaments };
-  return tournaments;
 }
 
 // Round IDs aren't exposed by any JSON endpoint — they only show up as
@@ -449,14 +355,8 @@ function findTrackedInMatches(rows, rankIndex) {
 }
 
 function loadGalactic() {
-  let state;
-  try { state = JSON.parse(fs.readFileSync(GALACTIC_FILE, "utf8")); }
-  catch { state = { lastPolled: null, lastError: null, trackedPlayers: MELEE_TRACKED_PLAYERS, tournaments: {} }; }
-  // Le tournoi suivi est un choix de l'utilisateur (cf. /api/galactic/track),
-  // donc un état persisté ; MELEE_TOURNAMENTS n'en est que la valeur initiale,
-  // au premier démarrage ou après suppression du cache.
-  if (!Array.isArray(state.tracked) || !state.tracked.length) state.tracked = MELEE_TOURNAMENTS;
-  return state;
+  try { return JSON.parse(fs.readFileSync(GALACTIC_FILE, "utf8")); }
+  catch { return { lastPolled: null, lastError: null, trackedPlayers: MELEE_TRACKED_PLAYERS, tournaments: {} }; }
 }
 
 function saveGalactic(state) {
@@ -472,7 +372,7 @@ async function pollGalacticOnce() {
   const state = loadGalactic();
   state.trackedPlayers = MELEE_TRACKED_PLAYERS;
   try {
-    for (const { id, label } of state.tracked) {
+    for (const { id, label } of MELEE_TOURNAMENTS) {
       const previous = state.tournaments[id] || {};
 
       // Un tournoi terminé ne bougera plus : une fois son instantané complet
@@ -580,7 +480,7 @@ async function pollGalacticOnce() {
 
     // L'ordre des clés d'un objet JSON n'est pas fiable côté client (clés
     // numériques = ordre croissant, pas l'ordre déclaré ici).
-    state.order = state.tracked.map((t) => t.id);
+    state.order = MELEE_TOURNAMENTS.map((t) => t.id);
     state.lastPolled = new Date().toISOString();
     state.lastError = null;
   } catch (err) {
@@ -1243,55 +1143,6 @@ function handleRequest(req, res) {
   if (url.pathname === "/api/galactic/status") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(loadGalactic()));
-    return;
-  }
-
-  // Tournois SWU du jour, pour le menu déroulant. Mis en cache 5 min côté
-  // serveur : ouvrir le menu ne doit pas rappeler melee.gg à chaque fois.
-  if (url.pathname === "/api/galactic/tournaments") {
-    listMeleeTournaments()
-      .then((tournaments) => {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ tournaments }));
-      })
-      .catch((err) => {
-        res.writeHead(502, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
-      });
-    return;
-  }
-
-  // Change le tournoi suivi. Les données de l'ancien sont jetées : elles
-  // n'ont plus rien à voir avec ce qu'on regarde, et les garder ferait
-  // apparaître deux tournois dans l'échelle.
-  if (url.pathname === "/api/galactic/track" && req.method === "POST") {
-    const id = Number(url.searchParams.get("id"));
-    if (!Number.isInteger(id) || id <= 0) {
-      res.writeHead(400, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "Identifiant de tournoi invalide." }));
-      return;
-    }
-    if (galacticPollInProgress) {
-      res.writeHead(409, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "Une actualisation melee.gg est déjà en cours." }));
-      return;
-    }
-    const state = loadGalactic();
-    state.tracked = [{ id, label: url.searchParams.get("label") || `Tournoi ${id}` }];
-    state.tournaments = {};
-    state.order = [id];
-    state.lastPolled = null;
-    state.lastError = null;
-    saveGalactic(state);
-    pollGalacticOnce()
-      .then(() => {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify(loadGalactic()));
-      })
-      .catch((err) => {
-        res.writeHead(502, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: err.message }));
-      });
     return;
   }
 
