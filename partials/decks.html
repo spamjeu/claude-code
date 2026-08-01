@@ -1,40 +1,63 @@
 <section class="panel">
-  <strong>🗂️ Base de decks locale (Premier)</strong>
-  <div class="status" id="deckDbStatus"></div>
-  <div class="row">
-    <button id="deckSync">Importer / mettre à jour (jusqu'à 200 decks Premier : "hot" + "top")</button>
-    <button class="danger" id="deckClear">🗑️ Vider la base locale</button>
+  <div class="deck-head">
+    <strong>🗂️ Base de decks locale (Premier)</strong>
+    <span class="status" id="deckDbStatus"></span>
+  </div>
+  <div class="deck-actions">
+    <button id="deckSync" title="Importe jusqu'à 200 decks Premier (classements « hot » + « top » de swudb.com) et les fusionne dans la base locale">⬇️ Importer / mettre à jour</button>
+    <button class="danger" id="deckClear">🗑️ Vider</button>
     <span class="status" id="deckSyncStatus"></span>
   </div>
-  <div class="row" style="margin-top:10px">
-    <input id="deckCardQ" type="text" placeholder="Nom de carte (sépare par , ou + pour plusieurs) — vide = tous les decks" />
-    <select id="deckSort">
-      <option value="likes">Trier par favoris ❤️</option>
-      <option value="date">Trier par date (récents d'abord)</option>
-      <option value="leader">Trier par leader (A-Z)</option>
-    </select>
-    <select id="deckGroup">
-      <option value="none">Pas de regroupement</option>
-      <option value="leader">Regrouper par couleurs + leader</option>
-      <option value="set">Regrouper par extension du leader</option>
-    </select>
-    <button class="primary" id="deckSearch">Chercher les decks</button>
+
+  <div class="deck-filters">
+    <div class="field field-grow">
+      <label for="deckCardQ">Carte</label>
+      <input id="deckCardQ" type="text" placeholder="Nom de carte — vide = tous les decks" />
+    </div>
+    <div class="field">
+      <label for="deckSort">Trier par</label>
+      <select id="deckSort">
+        <option value="likes">Favoris ❤️</option>
+        <option value="date">Date (récents d'abord)</option>
+        <option value="leader">Leader (A-Z)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="deckGroup">Regrouper</label>
+      <select id="deckGroup">
+        <option value="none">Aucun regroupement</option>
+        <option value="leader">Couleurs + leader</option>
+        <option value="set">Extension du leader</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="deckPeriod">Publié</label>
+      <select id="deckPeriod">
+        <option value="all">Toutes les dates</option>
+        <option value="7">7 derniers jours</option>
+        <option value="30">30 derniers jours</option>
+        <option value="90">90 derniers jours</option>
+        <option value="season">Depuis la sortie d'ASH</option>
+        <option value="custom">Personnalisé</option>
+      </select>
+    </div>
+    <!-- Les deux bornes forment une paire : groupées, elles passent à la ligne
+         ensemble au lieu d'être coupées en deux par le retour à la ligne. -->
+    <div class="field-group">
+      <div class="field">
+        <label for="deckFrom">Du</label>
+        <input id="deckFrom" type="date" />
+      </div>
+      <div class="field">
+        <label for="deckTo">Au</label>
+        <input id="deckTo" type="date" />
+      </div>
+    </div>
+    <button class="primary field-action" id="deckSearch">Chercher</button>
   </div>
-  <div class="sub" style="margin-top:10px">Date de publication (sur swudb.com) :</div>
-  <div class="row" style="margin-top:6px">
-    <select id="deckPeriod">
-      <option value="all">Toutes les dates</option>
-      <option value="7">7 derniers jours</option>
-      <option value="30">30 derniers jours</option>
-      <option value="90">90 derniers jours</option>
-      <option value="season">Depuis la sortie d'ASH</option>
-      <option value="custom">Personnalisé</option>
-    </select>
-    <label class="hint">du <input id="deckFrom" type="date" /></label>
-    <label class="hint">au <input id="deckTo" type="date" /></label>
-  </div>
-  <div class="sub" style="margin-top:10px">Couleurs préférées (le deck doit contenir toutes celles cochées) :</div>
-  <div class="row" id="deckColorFilters" style="margin-top:6px">
+
+  <div class="field-label">Couleurs — le deck doit contenir toutes celles cochées</div>
+  <div class="row" id="deckColorFilters">
     <label><input type="checkbox" name="deckColor" value="Vigilance" /><img class="aspect-icon" src="assets/aspects/vigilance.png" alt="" /> Vigilance</label>
     <label><input type="checkbox" name="deckColor" value="Command" /><img class="aspect-icon" src="assets/aspects/command.png" alt="" /> Command</label>
     <label><input type="checkbox" name="deckColor" value="Aggression" /><img class="aspect-icon" src="assets/aspects/aggression.png" alt="" /> Aggression</label>

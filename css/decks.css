@@ -1,3 +1,42 @@
+/* --- En-tête + barre de filtres ---------------------------------------
+   Les contrôles étaient empilés dans des .row génériques, sans étiquette :
+   trois listes déroulantes de largeurs différentes et deux champs date bruts
+   (non stylés, donc blancs en thème sombre). Ici, une seule grille de champs
+   étiquetés, tous à la même hauteur, qui se replie en colonne sur mobile. */
+.deck-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.deck-head .status{margin:0}
+.deck-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
+  padding-bottom:12px;border-bottom:1px solid var(--border)}
+.deck-actions .status{margin:0}
+
+.deck-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field-grow{flex:1 1 240px}
+.field>label,.field-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+.field-label{margin:14px 0 6px}
+/* Hauteur commune : sans ça un <select> (padding 9px) et un <input> (10px) ne
+   s'alignent pas, et les champs date suivent encore une autre métrique. */
+.field>input,.field>select,.deck-filters .field-action{height:38px}
+.field>input[type=text]{flex:none;min-width:0;width:100%}
+.field-group{display:flex;gap:8px;align-items:flex-end}
+.field>input[type=date]{width:150px;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  border-radius:4px;padding:0 10px;font-size:.9rem;font-family:inherit}
+.field>input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6)}
+@media (prefers-color-scheme:light){.field>input[type=date]::-webkit-calendar-picker-indicator{filter:none}}
+:root[data-theme="light"] .field>input[type=date]::-webkit-calendar-picker-indicator{filter:none}
+:root[data-theme="dark"] .field>input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6)}
+#deckColorFilters{gap:8px}
+
+@media (max-width:640px){
+  /* Empilés, les champs date à 50/50 pour garder "du/au" sur une ligne. */
+  .deck-filters{gap:8px}
+  .field-grow{flex:1 1 100%}
+  .deck-filters>.field,.field-group{flex:1 1 100%}
+  .field-group>.field{flex:1 1 0}
+  .field-group>.field>input[type=date]{width:100%}
+  .deck-filters .field-action{width:100%}
+}
+
 #deckSync.loading{position:relative;color:transparent;pointer-events:none}
 #deckSync.loading::after{
   content:"";position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
