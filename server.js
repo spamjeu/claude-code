@@ -65,7 +65,10 @@ const MELEE_REFERER = "https://melee.gg/";
 const MELEE_TOURNAMENTS = [
   { id: 443936, label: "PQ Strasbourg (Philibert)" },
 ];
-const MELEE_TRACKED_PLAYERS = ["Pecoraban", "Fred57155", "Malette", "Liryos", "Mario57", "ftdm57", "LorN_Leonidas", "Bibam"];
+const MELEE_TRACKED_PLAYERS = [
+  "Pecoraban", "Fred57155", "Malette", "Liryos", "Mario57",
+  "ftdm57", "LorN_Leonidas", "Bibam", "Schfab31", "JulesMelee",
+];
 const GALACTIC_FILE = path.join(ROOT, "data", "galactic.json");
 const GALACTIC_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const MELEE_REQUEST_DELAY_MS = 1500;

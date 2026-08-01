@@ -38,7 +38,12 @@
 .gal-row-head{display:grid;grid-template-columns:auto 3.5ch 1fr auto auto auto;align-items:center;gap:10px;
   width:100%;padding:9px 12px;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .gal-row-head:hover{background:var(--panel2)}
+/* Pseudo suivi mais absent du tournoi : grisé et en bordure pointillée, pour
+   qu'on voie d'un coup d'œil qu'il n'y a rien à en attendre — sans le retirer
+   de la liste (savoir qui ne joue pas fait partie de l'info). */
+.gal-row-missing{opacity:.5;border-style:dashed;background:none}
 .gal-row-missing .gal-row-head{cursor:default;color:var(--muted)}
+.gal-row-missing .gal-row-name{font-weight:400}
 .gal-row-missing .gal-row-head:hover{background:none}
 .gal-row-rank{font-family:var(--mono);font-weight:700;color:var(--accent);text-align:right}
 .gal-row-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

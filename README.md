@@ -156,9 +156,11 @@ place sous l'échelle, et un clic scrolle jusqu'à lui.
   automatiquement, ignoré par git). Le bouton "Forcer une actualisation"
   déclenche un cycle immédiat plutôt que d'attendre les 5 minutes.
 - Pseudos suivis : `Pecoraban`, `Fred57155`, `Malette`, `Liryos`, `Mario57`,
-  `ftdm57`, `LorN_Leonidas`, `Bibam` — à ajuster dans `MELEE_TRACKED_PLAYERS`
-  si besoin (matching en sous-chaîne insensible à la casse sur le username et
-  le nom affiché).
+  `ftdm57`, `LorN_Leonidas`, `Bibam`, `Schfab31`, `JulesMelee` — à ajuster dans
+  `MELEE_TRACKED_PLAYERS` si besoin (matching en sous-chaîne insensible à la
+  casse sur le username et le nom affiché). Un pseudo suivi qui ne joue pas le
+  tournoi reste affiché, grisé et en pointillés en bas de l'échelle : savoir
+  qui ne participe pas fait partie de l'information.
 
 ## Données
 
