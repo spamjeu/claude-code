@@ -368,6 +368,61 @@ window.SWU_TABS.galactic = function initGalactic() {
     }
   }
 
+  // --- Choix du tournoi suivi ------------------------------------------
+  // La liste n'est chargée qu'à l'ouverture du sélecteur : c'est un appel
+  // melee.gg de plus, inutile de le payer à chaque chargement de page pour
+  // une fonction qu'on n'utilise qu'occasionnellement.
+  const pickerEl = document.getElementById("galPicker");
+  const pickToggle = document.getElementById("galPickToggle");
+  const pickSelect = document.getElementById("galPickSelect");
+  const pickApply = document.getElementById("galPickApply");
+  let pickList = [];
+
+  async function loadPickList() {
+    pickSelect.innerHTML = `<option value="">Chargement…</option>`;
+    try {
+      const res = await fetch("/api/galactic/tournaments");
+      const data = await res.json();
+      if (data.error || !res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      pickList = data.tournaments || [];
+      pickSelect.innerHTML = pickList.map((t) =>
+        `<option value="${esc(t.id)}">${esc(t.name)} — ${esc(t.organization || "?")} (${esc(t.players)} j.)</option>`
+      ).join("") || `<option value="">Aucun tournoi SWU aujourd'hui</option>`;
+    } catch (err) {
+      pickList = [];
+      pickSelect.innerHTML = `<option value="">Erreur : ${esc(err.message)}</option>`;
+    }
+  }
+
+  pickToggle.addEventListener("click", () => {
+    pickerEl.hidden = !pickerEl.hidden;
+    if (!pickerEl.hidden && !pickList.length) loadPickList();
+  });
+  pickApply.addEventListener("click", async () => {
+    const choice = pickList.find((t) => String(t.id) === pickSelect.value);
+    if (!choice) return;
+    pickApply.disabled = true;
+    statusEl.classList.remove("err");
+    statusEl.textContent = "Changement de tournoi (première récupération, quelques secondes)…";
+    try {
+      const params = new URLSearchParams({ id: String(choice.id), label: choice.name });
+      const res = await fetch(`/api/galactic/track?${params}`, { method: "POST" });
+      const data = await res.json();
+      if (data.error || !res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // Le tournoi a changé : on repart d'un rendu neuf plutôt que de laisser
+      // une sélection de joueur qui ne veut plus rien dire.
+      selectedKey = null;
+      renderedToken = null;
+      pickerEl.hidden = true;
+      await refresh(false);
+    } catch (err) {
+      statusEl.classList.add("err");
+      statusEl.textContent = `Erreur : ${err.message}`;
+    } finally {
+      pickApply.disabled = false;
+    }
+  });
+
   refreshBtn.addEventListener("click", () => refresh(true));
   refresh(false);
   // Cette boucle interroge seulement le cache local (data/galactic.json) —

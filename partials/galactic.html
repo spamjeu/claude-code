@@ -3,17 +3,27 @@
   <p class="hint" style="margin-top:6px">
     Suit automatiquement 10 pseudos (<code>Pecoraban</code>, <code>Fred57155</code>, <code>Malette</code>,
     <code>Liryos</code>, <code>Mario57</code>, <code>ftdm57</code>, <code>LorN_Leonidas</code>,
-    <code>Bibam</code>, <code>Schfab31</code>, <code>JulesMelee</code>) — ceux qui ne participent pas
-    apparaissent grisés en bas de l'échelle — à travers le
-    <a class="gal-link" href="https://melee.gg/Tournament/View/443936" target="_blank" rel="noopener">PQ Strasbourg (Philibert)</a>
-    sur melee.gg (01/08/2026). L'API interne de melee.gg bloque temporairement les requêtes trop
-    fréquentes, donc le serveur ne rafraîchit que toutes les 5 minutes — c'est volontairement lent
-    plutôt que "temps réel", pour ne pas risquer de te faire bloquer alors que tu suis le tournoi en
-    parallèle dans ton navigateur.
+    <code>Bibam</code>, <code>Schfab31</code>, <code>JulesMelee</code>) à travers un tournoi melee.gg —
+    ceux qui n'y participent pas apparaissent grisés en bas de l'échelle. Le tournoi suivi se choisit
+    ci-dessous ; il est retenu jusqu'au prochain changement. L'API interne de melee.gg bloque
+    temporairement les requêtes trop fréquentes, donc le serveur ne rafraîchit que toutes les
+    5 minutes — c'est volontairement lent plutôt que "temps réel", pour ne pas risquer de te faire
+    bloquer alors que tu suis le tournoi en parallèle dans ton navigateur.
   </p>
   <div class="row">
     <button id="galRefresh">🔄 Forcer une actualisation</button>
+    <button id="galPickToggle">🎯 Changer de tournoi</button>
     <span class="status" id="galStatus"></span>
+  </div>
+
+  <div id="galPicker" hidden>
+    <div class="deck-filters">
+      <div class="field field-grow">
+        <label for="galPickSelect">Tournois Star Wars: Unlimited du jour</label>
+        <select id="galPickSelect"></select>
+      </div>
+      <button class="primary field-action" id="galPickApply">Suivre</button>
+    </div>
   </div>
 </section>
 
