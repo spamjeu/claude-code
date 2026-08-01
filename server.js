@@ -41,7 +41,7 @@ const ASH_START_WEEK = Math.floor((ASH_RELEASE_DATE_MS - SWUSTATS_WEEK_ANCHOR_MS
 // numbers cover (e.g. "depuis le 11/07/2026") instead of just "ASH".
 const ASH_SEASON_START_ISO = new Date(ASH_RELEASE_DATE_MS).toISOString().slice(0, 10);
 
-// --- Galactic Championship tracker (melee.gg) --------------------------------
+// --- Tournoi(s) melee.gg suivis ----------------------------------------------
 // melee.gg has no documented public API and (like api.swu-db.com) no CORS
 // headers, so this needs the same server-side relay treatment. On top of
 // that it fronts everything with a WAF that 403s requests missing a
@@ -49,21 +49,23 @@ const ASH_SEASON_START_ISO = new Date(ASH_RELEASE_DATE_MS).toISOString().slice(0
 // temporarily blocks the calling IP outright after a handful of requests in
 // quick succession. So this polls far more conservatively than the swudb.com
 // deck sync above: one request in flight at a time, a real delay between
-// each, registration-phase tournaments are skipped after a single cheap
-// status check, and a failed poll cycle just waits for the next one instead
-// of retrying — better to under-refresh than to get the user's own IP
-// blocked from watching the tournament live in their browser.
+// each, not-yet-started tournaments are skipped after a single cheap page
+// fetch, a completed tournament stops being polled entirely once its final
+// snapshot is cached, and a failed poll cycle just waits for the next one
+// instead of retrying — better to under-refresh than to get the user's own
+// IP blocked from watching the tournament live in their browser.
+//
+// Chaque entrée ci-dessous est un tournoi melee.gg autonome, identifié par
+// son seul ID — pas besoin qu'il appartienne à un Hub commun (le Galactic
+// Championship de juillet 2026 en était un, ce PQ ne l'est pas) : le nom, le
+// statut et l'effectif sont lus directement sur la page HTML du tournoi
+// (cf. extractTournamentHeadline) plutôt que via l'API de recherche d'un Hub.
 const MELEE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const MELEE_REFERER = "https://melee.gg/Hub/View/37072";
-const MELEE_HUB_ID = 37072;
+const MELEE_REFERER = "https://melee.gg/";
 const MELEE_TOURNAMENTS = [
-  { id: 403891, label: "Last Chance Qualifier" },
-  { id: 403893, label: "Main Event" },
-  { id: 403894, label: "Galactic Open Premier" },
-  { id: 404187, label: "Galactic Open Eternal (Red)" },
-  { id: 412104, label: "Galactic Open Eternal (Blue)" },
+  { id: 443936, label: "PQ Strasbourg (Philibert)" },
 ];
-const MELEE_TRACKED_PLAYERS = ["Pecoraban", "Fred57155", "Malette"];
+const MELEE_TRACKED_PLAYERS = ["Pecoraban", "Fred57155", "Malette", "Liryos", "Mario57", "ftdm57", "LorN_Leonidas"];
 const GALACTIC_FILE = path.join(ROOT, "data", "galactic.json");
 const GALACTIC_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const MELEE_REQUEST_DELAY_MS = 1500;
@@ -130,15 +132,6 @@ function dataTablesEnvelope(extra) {
   };
 }
 
-async function meleeGetHubTournaments() {
-  const fields = dataTablesEnvelope({
-    length: "50",
-    ...dataTablesColumnFields(["StartDate", "ID", "Name", "Game", "Status"]),
-  });
-  const data = await meleePostForm(`/Hub/SearchTournaments/${MELEE_HUB_ID}`, fields);
-  return data.data || [];
-}
-
 // Round IDs aren't exposed by any JSON endpoint — they only show up as
 // data-id attributes on the round-selector buttons rendered into the
 // tournament's own HTML page, and only once the tournament has actually
@@ -165,9 +158,37 @@ function roundNumber(round) {
   return parseInt((String(round.name).match(/\d+/) || [0])[0], 10);
 }
 
+// Nom, statut ("Registration" / "In Progress" / "Ended" côté vocabulaire
+// interne, peu importe le libellé exact melee.gg) et effectif ne sont exposés
+// par aucun endpoint JSON pour un tournoi pris isolément (contrairement à un
+// Hub, qui les renvoie en un seul appel pour tous ses tournois) : on les lit
+// donc directement sur l'en-tête de la page HTML du tournoi, déjà récupérée
+// pour les sélecteurs de ronde ci-dessus.
+function extractTournamentHeadline(html) {
+  const name = ((html.match(/<h3 class="mb-1">([\s\S]*?)<\/h3>/) || [])[1] || "")
+    .replace(/<[^>]*>/g, "").trim() || null;
+  const regBlock = (html.match(/<p id="tournament-headline-registration">([\s\S]*?)<\/p>/) || [])[1] || "";
+  const statusText = ((regBlock.match(/fa-info-circle[^<]*<\/i>\s*([^|]+)\|/) || [])[1] || "").trim() || null;
+  const counts = regBlock.match(/(\d+)\s+of\s+(\d+)\s+Enrolled Players/);
+  const playerCount = counts ? `${counts[1]}/${counts[2]}` : null;
+  return { name, statusText, playerCount };
+}
+
+// Seuls "Ended" et "In Progress" ont été constatés en vrai (un tournoi
+// terminé, un en cours) : tout le reste (page de pré-tournoi, libellé
+// jamais vu) retombe prudemment sur "not_started" pour ne pas déclencher les
+// requêtes de rondes/matchs avant que le tournoi ait vraiment commencé.
+function tournamentPhase(statusText) {
+  const s = (statusText || "").toLowerCase();
+  if (s.includes("ended")) return "ended";
+  if (s.includes("progress")) return "started";
+  return "not_started";
+}
+
 async function meleeGetTournamentRounds(tournamentId) {
   const html = await meleeGetHtml(`/Tournament/View/${tournamentId}`);
   return {
+    ...extractTournamentHeadline(html),
     standingsRounds: extractRoundSelectors(html, "is-completed"),
     pairingsRounds: extractRoundSelectors(html, "is-started"),
   };
@@ -348,48 +369,39 @@ async function pollGalacticOnce() {
   const state = loadGalactic();
   state.trackedPlayers = MELEE_TRACKED_PLAYERS;
   try {
-    const summaries = await meleeGetHubTournaments();
-    await sleep(MELEE_REQUEST_DELAY_MS);
-    const summaryById = Object.fromEntries(summaries.map((t) => [t.ID, t]));
-
     for (const { id, label } of MELEE_TOURNAMENTS) {
-      const summary = summaryById[id];
       const previous = state.tournaments[id] || {};
+
+      // Un tournoi terminé ne bougera plus : une fois son instantané complet
+      // récupéré, on arrête complètement de l'interroger — pas même la page
+      // du tournoi, pour ne jamais repayer 8 rondes de requêtes pour rien.
+      if (previous.complete) {
+        state.tournaments[id] = previous;
+        continue;
+      }
+
       // players/roundCache repartent vides à chaque poll réussi : les réutiliser
       // en permanence faisait qu'une ronde ratée restait affichée pour toujours
       // comme si elle était à jour (classement figé sur une vieille ronde). On
       // ne retombe sur les anciennes données que si le poll échoue (catch).
-      const entry = {
-        id, label,
-        name: summary ? summary.Name : label,
-        statusDescription: summary ? summary.StatusDescription : "Inconnu",
-        playerCount: summary ? summary.ParticipatingCount : null,
-        players: {},
-      };
-
-      if (!summary || summary.StatusDescription === "Registration") {
-        entry.status = "not_started";
-        entry.players = previous.players || {};
-        entry.roundCache = previous.roundCache;
-        state.tournaments[id] = entry;
-        continue;
-      }
-
-      // Un tournoi terminé ne bougera plus : une fois son instantané complet
-      // récupéré, on arrête de l'interroger. Sinon on repaie ses 8 rondes de
-      // requêtes toutes les 5 minutes, indéfiniment.
-      if (summary.StatusDescription === "Ended" && previous.complete) {
-        Object.assign(entry, {
-          status: "finished", complete: true,
-          players: previous.players || {}, roundCache: previous.roundCache, rounds: previous.rounds,
-        });
-        state.tournaments[id] = entry;
-        continue;
-      }
+      const entry = { id, label, players: {} };
 
       try {
-        const { standingsRounds, pairingsRounds } = await meleeGetTournamentRounds(id);
+        const { name, statusText, playerCount, standingsRounds, pairingsRounds } =
+          await meleeGetTournamentRounds(id);
         await sleep(MELEE_REQUEST_DELAY_MS);
+        entry.name = name || label;
+        entry.statusDescription = statusText || "Inconnu";
+        entry.playerCount = playerCount;
+        const phase = tournamentPhase(statusText);
+
+        if (phase === "not_started") {
+          entry.status = "not_started";
+          entry.players = previous.players || {};
+          entry.roundCache = previous.roundCache;
+          state.tournaments[id] = entry;
+          continue;
+        }
 
         // melee.gg ne publie pas le classement de la toute dernière ronde d'un
         // tournoi terminé (elle répond 0 ligne) : on remonte les rondes jusqu'à
@@ -450,7 +462,7 @@ async function pollGalacticOnce() {
 
         entry.roundCache = roundCache;
         entry.rounds = startedPairingRounds.length;
-        entry.status = summary.StatusDescription === "Ended" ? "finished" : "started";
+        entry.status = phase === "ended" ? "finished" : "started";
         entry.complete = entry.status === "finished";
       } catch (err) {
         entry.status = "error";

@@ -35,17 +35,17 @@
     <button class="tab" data-tab="binder">📖 Classeur</button>
     <button class="tab" data-tab="decks">🗂️ Base de decks</button>
     <button class="tab" data-tab="deckbuilder">🛠️ Deck Builder</button>
+    <button class="tab" data-tab="galactic">🏆 Tournoi</button>
   </div>
 
   <!-- Le contenu de chaque onglet vit dans son propre fichier (partials/<tab>.html,
        js/<tab>.js) et est injecté ici au chargement par js/common.js, pour que
-       modifier un onglet ne touche qu'à ses fichiers à lui.
-       (l'onglet "galactic" reste disponible dans partials/galactic.html, js/galactic.js
-       et le polling melee.gg côté serveur — juste retiré d'ici pour ne plus être affiché) -->
+       modifier un onglet ne touche qu'à ses fichiers à lui. -->
   <section class="tabpanel" data-tabpanel="cards"></section>
   <section class="tabpanel" data-tabpanel="binder" hidden></section>
   <section class="tabpanel" data-tabpanel="decks" hidden></section>
   <section class="tabpanel" data-tabpanel="deckbuilder" hidden></section>
+  <section class="tabpanel" data-tabpanel="galactic" hidden></section>
 </main>
 
 <footer>

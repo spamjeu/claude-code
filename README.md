@@ -90,39 +90,39 @@ sortirait dans l'ordre alphabétique. La liste des extensions est partagée entr
 les onglets via `window.SWU.SETS` (`js/common.js`), et validée côté serveur par
 `KNOWN_SETS` (`server.js`).
 
-## Suivi Galactic Championship (onglet "Galactic")
+## Suivi de tournoi melee.gg (onglet "Tournoi")
 
-> **Onglet actuellement masqué.** Le bouton d'onglet et son panneau ont été
-> retirés de `index.html`, mais tout le reste est intact (`partials/galactic.html`,
-> `js/galactic.js`, `css/galactic.css` et le polling melee.gg dans `server.js`,
-> qui tourne toujours). Pour le réafficher, il suffit de remettre le bouton
-> `<button class="tab" data-tab="galactic">` et la section
-> `<section class="tabpanel" data-tabpanel="galactic">` dans `index.html`.
-
-Cet onglet suit automatiquement 3 pseudos (configurés en dur dans `server.js`,
-constante `MELEE_TRACKED_PLAYERS`) à travers les 5 tournois du
-[Galactic Championship Tournament Hub](https://melee.gg/Hub/View/37072) sur
-melee.gg (24–26/07/2026) : classement, round en cours, adversaire, table.
+Cet onglet suit automatiquement une liste de pseudos (configurés en dur dans
+`server.js`, constante `MELEE_TRACKED_PLAYERS`) à travers un ou plusieurs
+tournois melee.gg (constante `MELEE_TOURNAMENTS`, une liste `{ id, label }` —
+chaque tournoi est autonome, pas besoin qu'ils appartiennent à un même Hub) :
+classement, round en cours, adversaire, table. Actuellement suivi : le
+[PQ Strasbourg (Philibert)](https://melee.gg/Tournament/View/443936) du
+01/08/2026.
 
 - melee.gg n'a pas d'API publique documentée et ne renvoie pas d'en-tête CORS
   non plus — mêmes symptômes que api.swu-db.com, donc même traitement : un
   relais côté `server.js`. Ses endpoints internes ont été retrouvés en
-  inspectant son JS (`/Hub/SearchTournaments/{hubId}`,
-  `/Standing/GetRoundStandings/{roundId}`, `/Match/GetRoundMatches/{roundId}`).
+  inspectant son JS (`/Standing/GetRoundStandings/{roundId}`,
+  `/Match/GetRoundMatches/{roundId}`). Nom, statut et effectif d'un tournoi
+  ne sont exposés par aucun endpoint JSON pris isolément : ils sont lus
+  directement sur la page HTML du tournoi (`extractTournamentHeadline`).
 - melee.gg protège ces endpoints avec un WAF qui **bloque temporairement
   l'IP appelante** après une poignée de requêtes rapprochées (constaté en
   marge de l'implémentation). Le serveur ne rafraîchit donc que **toutes les
   5 minutes**, en série, avec un vrai délai entre chaque requête — et saute
   entièrement les tournois encore en phase d'inscription (aucun round posté)
-  pour limiter le nombre d'appels. C'est volontairement lent : le but est de
-  ne jamais risquer de bloquer ta propre connexion pendant que tu suis
-  l'événement en direct dans ton navigateur.
+  pour limiter le nombre d'appels, et arrête complètement d'interroger un
+  tournoi une fois son instantané final mis en cache. C'est volontairement
+  lent : le but est de ne jamais risquer de bloquer ta propre connexion
+  pendant que tu suis l'événement en direct dans ton navigateur.
 - Les résultats sont mis en cache dans `data/galactic.json` (créé
   automatiquement, ignoré par git). Le bouton "Forcer une actualisation"
   déclenche un cycle immédiat plutôt que d'attendre les 5 minutes.
-- Pseudos suivis : `Fred57155`, `Pecoraban`, `Malette` — à ajuster dans
-  `MELEE_TRACKED_PLAYERS` si besoin (matching en sous-chaîne insensible à
-  la casse sur le username et le nom affiché).
+- Pseudos suivis : `Pecoraban`, `Fred57155`, `Malette`, `Liryos`, `Mario57`,
+  `ftdm57`, `LorN_Leonidas` — à ajuster dans `MELEE_TRACKED_PLAYERS` si
+  besoin (matching en sous-chaîne insensible à la casse sur le username et
+  le nom affiché).
 
 ## Données
 
