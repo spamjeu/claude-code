@@ -258,10 +258,10 @@ function parseResult(resultString, ownUsername, ownDisplayName) {
 }
 
 // melee.gg only attaches a Decklists entry once a tournament organizer turns
-// decklist collection on for the event (none of the 2026 Galactic
-// Championship tournaments currently do — DecklistEnabled is false on all
-// five), so this is normally empty, but the field is cheap to carry through
-// for whenever an event does have it.
+// decklist collection on for the event (DecklistEnabled sur la page du
+// tournoi) : le Galactic Championship 2026 les avait, le PQ de Strasbourg
+// non — d'où des badges deck présents sur l'un et absents sur l'autre, sans
+// que ce soit un bug de récupération.
 function decklistLinks(decklists) {
   return (decklists || [])
     .filter((d) => d && d.DecklistId)
