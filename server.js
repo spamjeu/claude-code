@@ -240,22 +240,31 @@ function matchesTrackedPlayer(needle, username, displayName) {
   return names.some((n) => n.includes(needle)) ? "partial" : null;
 }
 
-// ResultString reads like "Pecoraban won 2-0-0", "Draw", "Not reported"
+// ResultString reads like "Pecoraban won 2-0-0", "0-0-3 Draw", "Not reported"
 // (match not finished/reported yet), or "X s'est vu attribuer un bye" /
 // "X was awarded a bye" — pull out the game score and classify the outcome
 // from the tracked player's own side so the UI can color it. A bye counts
 // as a round win in melee.gg standings, so it's classified as "win".
+// Le score précède le mot "Draw" : le chercher n'importe où dans la chaîne,
+// sinon une nulle reste "pending" et le joueur a l'air encore en match des
+// rondes après (pastille grise, ligne marquée live, nulle perdue du bilan).
 function parseResult(resultString, ownUsername, ownDisplayName) {
   const raw = resultString || "";
-  const score = (raw.match(/\d+-\d+-\d+/) || [])[0] || null;
+  let score = (raw.match(/\d+-\d+-\d+/) || [])[0] || null;
   const lower = raw.toLowerCase();
   let outcome = "pending";
   if (lower.includes("not reported")) outcome = "pending";
   else if (lower.includes("bye")) outcome = "win";
-  else if (lower.startsWith("draw")) outcome = "draw";
+  else if (lower.includes("draw")) outcome = "draw";
   else if (lower.includes("won")) {
     const ownLower = [ownUsername, ownDisplayName].filter(Boolean).map((s) => s.toLowerCase());
     outcome = ownLower.some((n) => lower.startsWith(n)) ? "win" : "loss";
+  }
+  // Le score melee est toujours écrit du point de vue du vainqueur : tel quel,
+  // une défaite s'affiche "2-0-0" sur la ligne du joueur qui a perdu.
+  if (outcome === "loss" && score) {
+    const [w, l, d] = score.split("-");
+    score = `${l}-${w}-${d}`;
   }
   return { score, outcome };
 }

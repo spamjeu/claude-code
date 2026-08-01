@@ -67,6 +67,29 @@ window.SWU_TABS.galactic = function initGalactic() {
     return `${tally.win}-${tally.loss}-${tally.draw}`;
   }
 
+  // Le bilan affiché est celui que melee.gg publie (MatchRecord du classement),
+  // pas un recomptage maison : melee classe sur la dernière ronde *terminée*
+  // alors que les appariements de la ronde suivante sont déjà connus, donc
+  // recompter depuis les matchs donne en permanence un bilan en avance d'une
+  // ronde sur la page melee (et suppose qu'on interprète bien chaque libellé
+  // de résultat). On ne recompte que faute de classement publié (ronde 1).
+  function recordOf(occ) {
+    return (occ.standing && occ.standing.matchRecord) || record(occ.matches);
+  }
+
+  function parseRecord(str) {
+    const [win, loss, draw] = String(str || "").split("-").map((n) => parseInt(n, 10) || 0);
+    return { win, loss, draw };
+  }
+
+  function totalRecord(occurrences) {
+    const total = occurrences.reduce((acc, occ) => {
+      const r = parseRecord(recordOf(occ));
+      return { win: acc.win + r.win, loss: acc.loss + r.loss, draw: acc.draw + r.draw };
+    }, { win: 0, loss: 0, draw: 0 });
+    return `${total.win}-${total.loss}-${total.draw}`;
+  }
+
   const OUTCOME_LABELS = { win: "Victoire", loss: "Défaite", draw: "Nulle", pending: "En cours" };
 
   // La suite de pastilles vert/bleu/rouge est le seul endroit où le parcours
@@ -156,6 +179,10 @@ window.SWU_TABS.galactic = function initGalactic() {
       ? `<span class="gal-live" title="${esc(live.roundName)}">● ${esc(live.roundName)}</span>`
       : (dropLabel ? `<span class="gal-out" title="${esc((standing && standing.status) || "")}">${esc(dropLabel)}</span>` : "");
     const event = showEvent ? `<span class="gal-row-event" title="${esc(tournamentLabel)}">${esc(tournamentLabel)}</span>` : "";
+    // Les pastilles peuvent montrer une ronde de plus que le bilan (résultat
+    // connu, classement pas encore publié) : dire sur quelle ronde il porte.
+    const recordTitle = standing && standing.roundName
+      ? ` title="${esc(`Bilan melee.gg — ${standing.roundName}`)}"` : "";
 
     li.innerHTML = `
       <button type="button" class="gal-row-head" aria-pressed="${selected}">
@@ -163,7 +190,7 @@ window.SWU_TABS.galactic = function initGalactic() {
         <span class="gal-row-rank">${rank}</span>
         <span class="gal-row-name">${esc(name)}${event}</span>
         <span class="gal-pips">${pipsHtml(matches)}</span>
-        <span class="gal-row-record">${esc(record(matches))}</span>
+        <span class="gal-row-record"${recordTitle}>${esc(recordOf(occ))}</span>
         <span class="gal-row-status">${status}</span>
       </button>`;
 
@@ -204,13 +231,12 @@ window.SWU_TABS.galactic = function initGalactic() {
       </div>${rounds}`;
     }).join("") || "En attente de la première actualisation…";
 
-    const allMatches = occurrences.flatMap((o) => o.matches || []);
     const best = occurrences.find((o) => o.standing && o.standing.rank != null);
     const stats = occurrences.length ? `
       <div class="gal-stats" style="margin-top:12px">
         <div class="gal-stat"><div class="gal-stat-value">${esc(occurrences.length)}</div><div class="gal-stat-label">Suivis</div></div>
         <div class="gal-stat"><div class="gal-stat-value">${best ? `#${esc(best.standing.rank)}` : "—"}</div><div class="gal-stat-label">Meilleur rang</div></div>
-        <div class="gal-stat"><div class="gal-stat-value">${esc(record(allMatches))}</div><div class="gal-stat-label">Bilan cumulé</div></div>
+        <div class="gal-stat"><div class="gal-stat-value">${esc(totalRecord(occurrences))}</div><div class="gal-stat-label">Bilan cumulé</div></div>
       </div>` : "";
     const absent = missingCount
       ? `<p class="hint" style="margin-top:10px">${missingCount} pseudo${missingCount > 1 ? "s" : ""} pas encore repéré${missingCount > 1 ? "s" : ""} dans le tournoi.</p>`
