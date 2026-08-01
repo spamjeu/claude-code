@@ -100,6 +100,14 @@ classement, round en cours, adversaire, table. Actuellement suivi : le
 [PQ Strasbourg (Philibert)](https://melee.gg/Tournament/View/443936) du
 01/08/2026.
 
+L'affichage est une **échelle unique** : une ligne par joueur suivi, triée par
+rang melee.gg, plutôt qu'une carte par joueur (avec plusieurs pseudos dans un
+même tournoi, l'intérêt est de les comparer entre eux). Chaque ligne montre le
+rang, le pseudo, son parcours sous forme de pastilles — 🟩 victoire, 🟦 nulle,
+🟥 défaite, contour clignotant pour la ronde en cours — et son record. Cliquer
+sur une ligne déplie le détail : classement complet et liste des matchs avec
+adversaire, table et score.
+
 - melee.gg n'a pas d'API publique documentée et ne renvoie pas d'en-tête CORS
   non plus — mêmes symptômes que api.swu-db.com, donc même traitement : un
   relais côté `server.js`. Ses endpoints internes ont été retrouvés en
@@ -120,8 +128,8 @@ classement, round en cours, adversaire, table. Actuellement suivi : le
   automatiquement, ignoré par git). Le bouton "Forcer une actualisation"
   déclenche un cycle immédiat plutôt que d'attendre les 5 minutes.
 - Pseudos suivis : `Pecoraban`, `Fred57155`, `Malette`, `Liryos`, `Mario57`,
-  `ftdm57`, `LorN_Leonidas` — à ajuster dans `MELEE_TRACKED_PLAYERS` si
-  besoin (matching en sous-chaîne insensible à la casse sur le username et
+  `ftdm57`, `LorN_Leonidas`, `Bibam` — à ajuster dans `MELEE_TRACKED_PLAYERS`
+  si besoin (matching en sous-chaîne insensible à la casse sur le username et
   le nom affiché).
 
 ## Données

@@ -7,25 +7,45 @@
 :root[data-theme="light"]{--gal-win:#1d7a43;--gal-loss:#b3352f}
 :root[data-theme="dark"]{--gal-win:var(--good);--gal-loss:var(--bad)}
 
-/* auto-fit plutôt que 3 colonnes figées : suit le nombre de pseudos suivis et
-   ne coince plus les cartes entre 760 et 900px. */
-.gal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
-.gal-player-card strong{font-size:1rem}
-.gal-player-sum{color:var(--muted);font-size:.75rem;font-family:var(--mono);margin-top:2px}
+/* L'échelle : une ligne par joueur suivi, triée par rang, dépliable. */
+.gal-board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.gal-row{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--border);
+  border-radius:8px;overflow:hidden}
+.gal-row-live{border-left-color:var(--accent2)}
+.gal-row-out{opacity:.72}
+/* 6 colonnes = 6 enfants (chevron, rang, pseudo, pastilles, record, statut) :
+   une colonne de moins et le statut retomberait en 2e ligne, dans la colonne
+   du chevron, qu'il élargirait au passage. */
+.gal-row-head{display:grid;grid-template-columns:auto 3.5ch 1fr auto auto auto;align-items:center;gap:10px;
+  width:100%;padding:9px 12px;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.gal-row-head:hover{background:var(--panel2)}
+.gal-row-missing .gal-row-head{cursor:default;color:var(--muted)}
+.gal-row-missing .gal-row-head:hover{background:none}
+.gal-row-rank{font-family:var(--mono);font-weight:700;color:var(--accent);text-align:right}
+.gal-row-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gal-row-event{color:var(--muted);font-weight:400;font-size:.75rem;margin-left:6px}
+.gal-row-record{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.gal-row-status{font-size:.75rem;white-space:nowrap}
+.gal-row-body{padding:0 12px 12px;border-top:1px solid var(--border)}
+.gal-row.collapsed .gal-row-body{display:none}
+.gal-row.collapsed .gal-tournament-toggle{transform:rotate(-90deg)}
+
+/* Une pastille par ronde jouée : le parcours se lit sans déplier la ligne. */
+.gal-pips{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.gal-pip{width:13px;height:13px;border-radius:3px;background:var(--border)}
+.gal-pip-win{background:var(--gal-win)}
+.gal-pip-loss{background:var(--gal-loss)}
+.gal-pip-draw{background:var(--accent2)}
+/* Le match en cours n'a pas encore de couleur : contour clignotant, pas de fond. */
+.gal-pip-pending{background:none;border:1px dashed var(--accent2);animation:gal-pulse 1.6s ease-in-out infinite}
+@keyframes gal-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
 .gal-updated{animation:gal-flash 2s ease-out}
 @keyframes gal-flash{0%{box-shadow:0 0 0 2px var(--accent2)}100%{box-shadow:0 0 0 2px transparent}}
 
-.gal-tournament-block{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:.88rem}
-.gal-tournament-header{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
-  padding:2px 4px;margin:0 -4px;border-radius:4px}
-.gal-tournament-header:hover{background:var(--panel2)}
-.gal-tournament-toggle{display:inline-block;font-size:.7rem;color:var(--muted);transition:transform .15s ease;flex:0 0 auto}
-.gal-tournament-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gal-tournament-summary{margin-left:auto;flex:0 0 auto;color:var(--muted);font-size:.75rem;font-family:var(--mono)}
+.gal-tournament-toggle{display:inline-block;font-size:.7rem;color:var(--muted);transition:transform .15s ease}
 .gal-live{color:var(--accent2);font-weight:700}
 .gal-out{color:var(--muted);font-style:italic}
-.gal-tournament-block.collapsed .gal-tournament-toggle{transform:rotate(-90deg)}
-.gal-tournament-block.collapsed .gal-tournament-body{display:none}
 
 .gal-round-label{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .gal-standing{margin-top:10px}
@@ -62,6 +82,15 @@
 .gal-hub-count{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:.75rem}
 .badge.live{color:var(--accent2);border-color:var(--accent2)}
 .badge.bad{color:var(--bad);border-color:var(--bad)}
+
+/* En dessous, les 6 colonnes ne tiennent plus : ligne 1 = rang + pseudo +
+   record, ligne 2 = pastilles + statut, alignées sous le pseudo. */
+@media (max-width:560px){
+  .gal-row-head{grid-template-columns:auto 3.5ch 1fr auto;gap:6px 8px}
+  .gal-row-record{grid-row:1;grid-column:4}
+  .gal-pips{grid-row:2;grid-column:3;justify-content:flex-start}
+  .gal-row-status{grid-row:2;grid-column:4;justify-self:end}
+}
 
 @media (max-width:420px){
   .gal-stats{flex-wrap:wrap}
