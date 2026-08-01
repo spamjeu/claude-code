@@ -247,6 +247,12 @@ function selectedDeckColors(){
   return [...document.querySelectorAll('input[name="deckColor"]:checked')].map((el) => el.value);
 }
 
+// "Toutes les couleurs" n'est pas une couleur de plus : c'est l'état "aucune
+// cochée", donc la pastille s'allume toute seule quand plus rien n'est coché.
+function syncDeckColorAll(){
+  document.getElementById("deckColorAll").classList.toggle("selected", !selectedDeckColors().length);
+}
+
 // silent=true est utilisé par le poll de progression de synchro pour
 // rafraîchir les résultats sans effacer le statut/tableau à chaque tick
 // (évite le clignotement "Recherche…"/tableau vide pendant l'import).
@@ -410,7 +416,12 @@ window.SWU_TABS.decks = function initDecksTab(){
   deckSearchBtn.addEventListener("click", searchDecksByCard);
   deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });
   document.querySelectorAll('input[name="deckColor"]').forEach((el) => {
-    el.addEventListener("change", searchDecksByCard);
+    el.addEventListener("change", () => { syncDeckColorAll(); searchDecksByCard(); });
+  });
+  document.getElementById("deckColorAll").addEventListener("click", () => {
+    document.querySelectorAll('input[name="deckColor"]:checked').forEach((el) => (el.checked = false));
+    syncDeckColorAll();
+    searchDecksByCard();
   });
 
   wireCardPreview();

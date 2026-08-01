@@ -75,6 +75,19 @@ footer a{color:var(--accent2)}
   padding:10px 16px;font-size:.85rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 .tab.active{background:var(--panel);border-color:var(--border);border-bottom-color:var(--accent);color:var(--accent)}
 .tabpanel[hidden]{display:none}
+/* Filtres en pastilles, partagés par les aspects de la recherche de cartes et
+   les couleurs de la base de decks : mêmes filtres, même composant. Marche
+   avec des <button> (état porté par .selected) comme avec des <label> +
+   checkbox (état porté par :checked). */
+.chip-picker{display:flex;flex-wrap:wrap;gap:6px}
+.chip-picker button,.chip-picker label{display:flex;align-items:center;gap:6px;padding:5px 12px 5px 8px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--border);border-radius:999px;color:var(--muted);font-weight:600;font-size:.82rem}
+.chip-picker button.selected,.chip-picker label:has(input:checked){border-color:var(--accent);color:var(--accent);background:var(--panel)}
+/* La case à cocher fait doublon avec la pastille colorée : masquée à l'œil,
+   mais toujours cochable au clavier — d'où le focus visible porté par le label. */
+.chip-picker input{position:absolute;opacity:0;width:0;height:0}
+.chip-picker label:focus-within{outline:2px solid var(--accent2);outline-offset:1px}
+
 .aspect-dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.25)}
 .aspect-Vigilance{background:#6694ce}
 .aspect-Command{background:#41ad49}

@@ -25,7 +25,6 @@
 @media (prefers-color-scheme:light){.field>input[type=date]::-webkit-calendar-picker-indicator{filter:none}}
 :root[data-theme="light"] .field>input[type=date]::-webkit-calendar-picker-indicator{filter:none}
 :root[data-theme="dark"] .field>input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6)}
-#deckColorFilters{gap:8px}
 
 @media (max-width:640px){
   /* Empilés, les champs date à 50/50 pour garder "du/au" sur une ligne. */
@@ -72,10 +71,8 @@
 .deckgroup-title .muted{font-weight:400;color:var(--muted);font-size:.8rem}
 .deckgroup-caret{display:inline-block;width:.9em;font-size:.8em;color:var(--muted)}
 .deckgroup.collapsed .decklist-wrap{display:none}
-#deckColorFilters label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.88rem;
-  background:var(--panel2);border:1px solid var(--border);border-radius:999px;padding:5px 12px 5px 8px}
-#deckColorFilters label:has(input:checked){border-color:var(--accent);color:var(--accent)}
-#deckColorFilters input[type=checkbox]{accent-color:var(--accent);margin:0}
+/* Mise en forme des pastilles de couleur : .chip-picker dans common.css —
+   même composant que les aspects de la recherche de cartes. */
 [data-preview-set]{cursor:help; border-bottom:1px dotted var(--muted)}
 #cardPreview{position:fixed;display:none;z-index:1000;width:220px;aspect-ratio:5/7;
   border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5);
