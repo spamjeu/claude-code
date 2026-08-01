@@ -4,7 +4,7 @@
     Suit automatiquement 8 pseudos (<code>Pecoraban</code>, <code>Fred57155</code>, <code>Malette</code>,
     <code>Liryos</code>, <code>Mario57</code>, <code>ftdm57</code>, <code>LorN_Leonidas</code>,
     <code>Bibam</code>) à travers le
-    <a href="https://melee.gg/Tournament/View/443936" target="_blank" rel="noopener">PQ Strasbourg (Philibert)</a>
+    <a class="gal-link" href="https://melee.gg/Tournament/View/443936" target="_blank" rel="noopener">PQ Strasbourg (Philibert)</a>
     sur melee.gg (01/08/2026). L'API interne de melee.gg bloque temporairement les requêtes trop
     fréquentes, donc le serveur ne rafraîchit que toutes les 5 minutes — c'est volontairement lent
     plutôt que "temps réel", pour ne pas risquer de te faire bloquer alors que tu suis le tournoi en
@@ -16,9 +16,10 @@
   </div>
 </section>
 
-<section id="galPlayers"></section>
-
-<section class="panel">
-  <strong>Tournois suivis</strong>
-  <div id="galTournaments" class="hint" style="margin-top:8px"></div>
+<!-- Deux colonnes sur écran large : l'échelle à gauche, le détail du joueur
+     sélectionné à droite. En dessous de 900px, le détail passe simplement sous
+     l'échelle (une colonne). -->
+<section class="gal-layout">
+  <div id="galPlayers"></div>
+  <aside id="galDetail" class="panel gal-detail"></aside>
 </section>

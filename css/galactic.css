@@ -7,7 +7,26 @@
 :root[data-theme="light"]{--gal-win:#1d7a43;--gal-loss:#b3352f}
 :root[data-theme="dark"]{--gal-win:var(--good);--gal-loss:var(--bad)}
 
-/* L'échelle : une ligne par joueur suivi, triée par rang, dépliable. */
+/* Deux colonnes 50/50 sur écran large : l'échelle à gauche, le détail du
+   joueur sélectionné à droite. Le détail est collant — la liste défile, le
+   détail reste lisible. En dessous, une colonne : le détail passe sous
+   l'échelle (et le clic scrolle jusqu'à lui, cf. galactic.js). */
+/* Aucune règle globale ne colore les liens : sans ça ils tombent sur le bleu
+   par défaut du navigateur, illisible sur le fond sombre des panneaux. Règle
+   volontairement peu spécifique pour que .gal-hub-row a (plus bas) garde sa
+   propre couleur. */
+.gal-layout a,.gal-link{color:var(--accent2)}
+
+.gal-layout{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+@media (min-width:900px){
+  .gal-layout{grid-template-columns:1fr 1fr}
+  .gal-detail{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+}
+.gal-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.gal-detail-head strong{font-size:1rem}
+.gal-detail-close{flex:0 0 auto;padding:2px 8px;line-height:1.4}
+
+/* L'échelle : une ligne par joueur suivi, triée par rang, cliquable. */
 .gal-board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .gal-row{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--border);
   border-radius:8px;overflow:hidden}
@@ -26,9 +45,10 @@
 .gal-row-event{color:var(--muted);font-weight:400;font-size:.75rem;margin-left:6px}
 .gal-row-record{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
 .gal-row-status{font-size:.75rem;white-space:nowrap}
-.gal-row-body{padding:0 12px 12px;border-top:1px solid var(--border)}
-.gal-row.collapsed .gal-row-body{display:none}
-.gal-row.collapsed .gal-tournament-toggle{transform:rotate(-90deg)}
+/* Ligne ouverte dans le panneau de droite : elle doit rester repérable même
+   après avoir scrollé la liste. */
+.gal-row-selected{border-color:var(--accent);background:var(--panel2)}
+.gal-row-selected .gal-tournament-toggle{color:var(--accent);transform:translateX(2px)}
 
 /* Une pastille par ronde jouée : le parcours se lit sans déplier la ligne. */
 .gal-pips{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
@@ -76,7 +96,10 @@
 .gal-outcome-pending{border-left-color:var(--accent2);background:color-mix(in srgb, var(--accent2) 10%, var(--panel2))}
 .gal-outcome-pending .gal-match-score{color:var(--accent2)}
 
+/* Le titre melee.gg peut faire deux lignes : c'est lui qui doit passer à la
+   ligne, pas le badge de statut ni le compteur. */
 .gal-hub-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.gal-hub-row .badge,.gal-hub-count{white-space:nowrap}
 .gal-hub-row a{color:var(--text);text-decoration:none}
 .gal-hub-row a:hover{color:var(--accent2)}
 .gal-hub-count{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:.75rem}

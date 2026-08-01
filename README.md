@@ -100,13 +100,21 @@ classement, round en cours, adversaire, table. Actuellement suivi : le
 [PQ Strasbourg (Philibert)](https://melee.gg/Tournament/View/443936) du
 01/08/2026.
 
-L'affichage est une **échelle unique** : une ligne par joueur suivi, triée par
-rang melee.gg, plutôt qu'une carte par joueur (avec plusieurs pseudos dans un
-même tournoi, l'intérêt est de les comparer entre eux). Chaque ligne montre le
-rang, le pseudo, son parcours sous forme de pastilles — 🟩 victoire, 🟦 nulle,
-🟥 défaite, contour clignotant pour la ronde en cours — et son record. Cliquer
-sur une ligne déplie le détail : classement complet et liste des matchs avec
-adversaire, table et score.
+L'affichage est en **deux colonnes** sur écran large (≥ 900px) :
+
+- à gauche, une **échelle unique** — une ligne par joueur suivi, triée par rang
+  melee.gg, plutôt qu'une carte par joueur (avec plusieurs pseudos dans un même
+  tournoi, l'intérêt est de les comparer entre eux). Chaque ligne montre le
+  rang, le pseudo, son parcours sous forme de pastilles — 🟩 victoire, 🟦 nulle,
+  🟥 défaite, contour clignotant pour la ronde en cours — et son record ;
+- à droite, un panneau collant : par défaut l'état des tournois suivis (lien
+  melee.gg, statut, effectif) et le bilan cumulé des pseudos ; en cliquant un
+  pseudo, le détail de ce joueur (classement complet, puis chaque match avec
+  adversaire, rang de l'adversaire, table et score). Recliquer la même ligne
+  (ou le ✕) revient à la vue d'ensemble.
+
+En dessous de 900px, tout repasse sur une colonne : le panneau de détail se
+place sous l'échelle, et un clic scrolle jusqu'à lui.
 
 - melee.gg n'a pas d'API publique documentée et ne renvoie pas d'en-tête CORS
   non plus — mêmes symptômes que api.swu-db.com, donc même traitement : un

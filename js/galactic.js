@@ -2,7 +2,7 @@ window.SWU_TABS = window.SWU_TABS || {};
 
 window.SWU_TABS.galactic = function initGalactic() {
   const playersEl = document.getElementById("galPlayers");
-  const tournamentsEl = document.getElementById("galTournaments");
+  const detailEl = document.getElementById("galDetail");
   const statusEl = document.getElementById("galStatus");
   const refreshBtn = document.getElementById("galRefresh");
 
@@ -81,9 +81,10 @@ window.SWU_TABS.galactic = function initGalactic() {
     }).join("");
   }
 
-  // Data auto-refreshes every 30s; without this, a manual expand/collapse
-  // click would get silently undone by the next refresh.
-  const collapsedOverrides = {};
+  // Le joueur ouvert dans le panneau de droite, sous la forme "pseudo::idTournoi".
+  // Les données se rafraîchissent toutes les 30s : sans cet état conservé hors
+  // du DOM, chaque refresh refermerait le détail en cours de lecture.
+  let selectedKey = null;
 
   function occurrenceBodyHtml({ standing, matches }) {
     const parts = [];
@@ -122,25 +123,33 @@ window.SWU_TABS.galactic = function initGalactic() {
     return parts.join("") || `<div class="status">Aucun détail disponible pour l'instant.</div>`;
   }
 
-  // Une ligne de l'échelle = un joueur dans un tournoi. Repliée, elle tient le
-  // rang, le pseudo et le parcours ; dépliée, elle montre le détail des matchs.
-  function renderRow(occ, showEvent) {
-    const { name, tournamentId, tournamentLabel, standing, matches, isFinished, playerOut } = occ;
+  function dropLabelOf({ standing, isFinished, playerOut }) {
+    if (standing && standing.isActive === false) {
+      return DROP_LABELS[standing.status] || standing.status || "Abandon";
+    }
+    return playerOut && !isFinished ? "Éliminé" : null;
+  }
+
+  function occurrenceKey(occ) {
+    // Clé sur l'id : melee.gg renomme parfois un tournoi en cours de route.
+    return `${occ.name}::${occ.tournamentId}`;
+  }
+
+  // Une ligne de l'échelle = un joueur dans un tournoi : rang, pseudo, parcours
+  // et record. Le détail, lui, s'ouvre dans le panneau de droite (cf. onSelect).
+  function renderRow(occ, showEvent, onSelect) {
+    const { name, tournamentLabel, standing, matches } = occ;
     const li = document.createElement("li");
     li.className = "gal-row";
 
     const live = (matches || []).find((m) => m.outcome === "pending");
     if (live) li.classList.add("gal-row-live");
-    const dropLabel = standing && standing.isActive === false
-      ? (DROP_LABELS[standing.status] || standing.status || "Abandon")
-      : (playerOut && !isFinished ? "Éliminé" : null);
+    const dropLabel = dropLabelOf(occ);
     if (dropLabel) li.classList.add("gal-row-out");
 
-    // Clé sur l'id : melee.gg renomme parfois un tournoi en cours de route.
-    const overrideKey = `${name}::${tournamentId}`;
-    const collapsed = Object.hasOwn(collapsedOverrides, overrideKey) ? collapsedOverrides[overrideKey] : true;
-    if (collapsed) li.classList.add("collapsed");
-    li.dataset.overrideKey = overrideKey;
+    const key = occurrenceKey(occ);
+    const selected = key === selectedKey;
+    if (selected) li.classList.add("gal-row-selected");
 
     const rank = standing && standing.rank != null ? `#${esc(standing.rank)}` : "—";
     const status = live
@@ -149,22 +158,17 @@ window.SWU_TABS.galactic = function initGalactic() {
     const event = showEvent ? `<span class="gal-row-event" title="${esc(tournamentLabel)}">${esc(tournamentLabel)}</span>` : "";
 
     li.innerHTML = `
-      <button type="button" class="gal-row-head" aria-expanded="${!collapsed}">
-        <span class="gal-tournament-toggle">▾</span>
+      <button type="button" class="gal-row-head" aria-pressed="${selected}">
+        <span class="gal-tournament-toggle">›</span>
         <span class="gal-row-rank">${rank}</span>
         <span class="gal-row-name">${esc(name)}${event}</span>
         <span class="gal-pips">${pipsHtml(matches)}</span>
         <span class="gal-row-record">${esc(record(matches))}</span>
         <span class="gal-row-status">${status}</span>
-      </button>
-      <div class="gal-row-body">${occurrenceBodyHtml(occ)}</div>`;
+      </button>`;
 
-    const head = li.querySelector(".gal-row-head");
-    head.addEventListener("click", () => {
-      const nowCollapsed = li.classList.toggle("collapsed");
-      head.setAttribute("aria-expanded", String(!nowCollapsed));
-      collapsedOverrides[overrideKey] = nowCollapsed;
-    });
+    // Recliquer sur la ligne ouverte referme le détail (retour à la vue tournoi).
+    li.querySelector(".gal-row-head").addEventListener("click", () => onSelect(selected ? null : key));
     return li;
   }
 
@@ -182,6 +186,57 @@ window.SWU_TABS.galactic = function initGalactic() {
       <span class="gal-row-status">Pas encore repéré</span>
     </div>`;
     return li;
+  }
+
+  // Le panneau de droite quand aucun joueur n'est sélectionné : l'état des
+  // tournois suivis (avec leur lien melee.gg) et le bilan cumulé des pseudos.
+  function overviewHtml(tournaments, occurrences, missingCount) {
+    const rows = tournaments.map((t) => {
+      const cls = t.status === "error" ? "bad" : t.status === "started" ? "live" : "";
+      const label = t.status === "error" ? "erreur" : esc(FR_STATUS[t.statusDescription] || t.statusDescription || t.status);
+      // Message d'erreur melee.gg en title : inline, il casserait la mise en page.
+      const title = t.error ? ` title="${esc(t.error)}"` : "";
+      const count = t.playerCount != null ? `<span class="gal-hub-count">${esc(t.playerCount)} joueurs</span>` : "";
+      const rounds = t.rounds ? `<div class="hint">Ronde ${esc(t.rounds)}</div>` : "";
+      return `<div class="gal-hub-row">
+        <a href="https://melee.gg/Tournament/View/${esc(t.id)}" target="_blank" rel="noopener">${esc(t.name || t.label)}</a>
+        <span class="badge ${cls}"${title}>${label}</span>${count}
+      </div>${rounds}`;
+    }).join("") || "En attente de la première actualisation…";
+
+    const allMatches = occurrences.flatMap((o) => o.matches || []);
+    const best = occurrences.find((o) => o.standing && o.standing.rank != null);
+    const stats = occurrences.length ? `
+      <div class="gal-stats" style="margin-top:12px">
+        <div class="gal-stat"><div class="gal-stat-value">${esc(occurrences.length)}</div><div class="gal-stat-label">Suivis</div></div>
+        <div class="gal-stat"><div class="gal-stat-value">${best ? `#${esc(best.standing.rank)}` : "—"}</div><div class="gal-stat-label">Meilleur rang</div></div>
+        <div class="gal-stat"><div class="gal-stat-value">${esc(record(allMatches))}</div><div class="gal-stat-label">Bilan cumulé</div></div>
+      </div>` : "";
+    const absent = missingCount
+      ? `<p class="hint" style="margin-top:10px">${missingCount} pseudo${missingCount > 1 ? "s" : ""} pas encore repéré${missingCount > 1 ? "s" : ""} dans le tournoi.</p>`
+      : "";
+
+    return `<div class="gal-detail-head"><strong>Tournois suivis</strong></div>
+      ${rows}${stats}${absent}
+      <p class="hint" style="margin-top:12px">👈 Clique sur un pseudo pour voir le détail de ses matchs.</p>`;
+  }
+
+  function detailHtml(occ) {
+    const live = (occ.matches || []).find((m) => m.outcome === "pending");
+    const dropLabel = dropLabelOf(occ);
+    const status = live
+      ? `<span class="gal-live">● ${esc(live.roundName)}</span>`
+      : (dropLabel ? `<span class="gal-out">${esc(dropLabel)}</span>` : "");
+    return `<div class="gal-detail-head">
+        <div>
+          <strong>${esc(occ.name)}</strong> ${status}
+          <div class="hint">
+            <a href="https://melee.gg/Tournament/View/${esc(occ.tournamentId)}" target="_blank" rel="noopener">${esc(occ.tournamentLabel)}</a>
+          </div>
+        </div>
+        <button type="button" class="gal-detail-close" title="Fermer le détail" aria-label="Fermer le détail">✕</button>
+      </div>
+      ${occurrenceBodyHtml(occ)}`;
   }
 
   let firstRender = true;
@@ -224,36 +279,51 @@ window.SWU_TABS.galactic = function initGalactic() {
     // Le nom du tournoi n'est utile sur chaque ligne que s'il y en a plusieurs.
     const showEvent = new Set(occurrences.map((o) => o.tournamentId)).size > 1;
 
-    const board = document.createElement("ol");
-    board.className = "gal-board";
-    occurrences.forEach((occ) => {
-      const row = renderRow(occ, showEvent);
-      // Le rendu n'a lieu que sur données réellement neuves (cf. refresh) :
-      // un flash discret rend le changement visible sans avoir à comparer.
-      if (!firstRender) {
-        row.classList.add("gal-updated");
-        setTimeout(() => row.classList.remove("gal-updated"), 2000);
-      }
-      board.appendChild(row);
-    });
-    missing.forEach((name) => board.appendChild(renderMissingRow(name)));
+    // Un joueur sélectionné puis disparu des données (tournoi purgé, pseudo
+    // retiré du suivi) doit rendre la main à la vue d'ensemble, pas laisser un
+    // panneau vide.
+    if (selectedKey && !occurrences.some((o) => occurrenceKey(o) === selectedKey)) selectedKey = null;
 
-    playersEl.innerHTML = "";
-    playersEl.appendChild(board);
+    const drawBoard = () => {
+      const board = document.createElement("ol");
+      board.className = "gal-board";
+      occurrences.forEach((occ) => {
+        const row = renderRow(occ, showEvent, select);
+        // Le rendu n'a lieu que sur données réellement neuves (cf. refresh) :
+        // un flash discret rend le changement visible sans avoir à comparer.
+        if (!firstRender) {
+          row.classList.add("gal-updated");
+          setTimeout(() => row.classList.remove("gal-updated"), 2000);
+        }
+        board.appendChild(row);
+      });
+      missing.forEach((name) => board.appendChild(renderMissingRow(name)));
+      playersEl.innerHTML = "";
+      playersEl.appendChild(board);
+    };
+
+    const drawDetail = () => {
+      const occ = occurrences.find((o) => occurrenceKey(o) === selectedKey);
+      detailEl.innerHTML = occ ? detailHtml(occ) : overviewHtml(tournaments, occurrences, missing.length);
+      const close = detailEl.querySelector(".gal-detail-close");
+      if (close) close.addEventListener("click", () => select(null));
+    };
+
+    function select(key) {
+      selectedKey = key;
+      drawBoard();
+      drawDetail();
+      // En une colonne (mobile), le panneau est sous l'échelle : sans ça, un
+      // clic semble ne rien faire puisque le détail s'ouvre hors écran.
+      if (key && window.matchMedia("(max-width:899px)").matches) {
+        detailEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    drawBoard();
+    drawDetail();
     firstRender = false;
     document.title = anyLive ? `🔴 ${baseTitle}` : baseTitle;
-
-    tournamentsEl.innerHTML = tournaments.map((t) => {
-      const cls = t.status === "error" ? "bad" : t.status === "started" ? "live" : "";
-      const label = t.status === "error" ? "erreur" : esc(FR_STATUS[t.statusDescription] || t.statusDescription || t.status);
-      // Message d'erreur melee.gg en title : inline, il casserait la mise en page.
-      const title = t.error ? ` title="${esc(t.error)}"` : "";
-      const count = t.playerCount != null ? `<span class="gal-hub-count">${esc(t.playerCount)} joueurs</span>` : "";
-      return `<div class="gal-hub-row">
-        <a href="https://melee.gg/Tournament/View/${esc(t.id)}" target="_blank" rel="noopener">${esc(t.name || t.label)}</a>
-        <span class="badge ${cls}"${title}>${label}</span>${count}
-      </div>`;
-    }).join("") || "En attente de la première actualisation…";
   }
 
   let busy = false;
