@@ -16,6 +16,7 @@
 .decktable .deck-name-line a:hover{text-decoration:underline}
 .decktable .deck-leader-line{color:var(--muted);font-size:.8rem;margin-top:2px}
 .decktable .muted{color:var(--muted)}
+.decktable .col-date{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
 .decktable tr.deckrow-matches td{padding-top:0;padding-bottom:10px;white-space:normal}
 .decktable tr.deckrow-matches .badges-wrap{display:flex;flex-wrap:wrap;gap:5px}
 .meta-badge{color:var(--accent);border-color:var(--accent);white-space:nowrap}

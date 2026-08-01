@@ -10,6 +10,7 @@
     <input id="deckCardQ" type="text" placeholder="Nom de carte (sépare par , ou + pour plusieurs) — vide = tous les decks" />
     <select id="deckSort">
       <option value="likes">Trier par favoris ❤️</option>
+      <option value="date">Trier par date (récents d'abord)</option>
       <option value="leader">Trier par leader (A-Z)</option>
     </select>
     <select id="deckGroup">
@@ -18,6 +19,19 @@
       <option value="set">Regrouper par extension du leader</option>
     </select>
     <button class="primary" id="deckSearch">Chercher les decks</button>
+  </div>
+  <div class="sub" style="margin-top:10px">Date de publication (sur swudb.com) :</div>
+  <div class="row" style="margin-top:6px">
+    <select id="deckPeriod">
+      <option value="all">Toutes les dates</option>
+      <option value="7">7 derniers jours</option>
+      <option value="30">30 derniers jours</option>
+      <option value="90">90 derniers jours</option>
+      <option value="season">Depuis la sortie d'ASH</option>
+      <option value="custom">Personnalisé</option>
+    </select>
+    <label class="hint">du <input id="deckFrom" type="date" /></label>
+    <label class="hint">au <input id="deckTo" type="date" /></label>
   </div>
   <div class="sub" style="margin-top:10px">Couleurs préférées (le deck doit contenir toutes celles cochées) :</div>
   <div class="row" id="deckColorFilters" style="margin-top:6px">

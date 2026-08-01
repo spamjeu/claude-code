@@ -2,7 +2,7 @@
 // #cardPreview, qui vit dans le shell index.html mais n'est utilisé que par
 // les survols de cartes de cette base de decks).
 let deckSyncBtn, deckClearBtn, deckSyncStatus, deckCardQ, deckSearchBtn, deckSearchStatus,
-  deckResultsEl, deckSortSel, deckGroupSel, deckDbStatusEl;
+  deckResultsEl, deckSortSel, deckGroupSel, deckDbStatusEl, deckPeriodSel, deckFromEl, deckToEl;
 let lastDeckResults = [];
 
 // Presence méta (Premier) via l'API publique de swustats.net, scopée à la
@@ -63,10 +63,52 @@ function sortDecks(decks){
   const sorted = [...decks];
   if (deckSortSel.value === "leader") {
     sorted.sort((a, b) => (a.leaderName || "").localeCompare(b.leaderName || ""));
+  } else if (deckSortSel.value === "date") {
+    // publishDate est en ISO UTC : l'ordre lexicographique EST l'ordre chronologique.
+    sorted.sort((a, b) => String(b.publishDate || "").localeCompare(String(a.publishDate || "")));
   } else {
     sorted.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
   }
   return sorted;
+}
+
+// "2026-07-06T19:09:09.9Z" -> "06/07/2026". On coupe à la journée avant de
+// construire la Date : sans ça un deck publié en soirée UTC s'affiche la veille
+// (ou le lendemain) selon le fuseau du navigateur.
+function fmtPublishDate(iso){
+  if (!iso) return "";
+  return window.SWU.formatFrDate(String(iso).slice(0, 10));
+}
+
+// Les bornes envoyées au serveur ("YYYY-MM-DD", telles que les rend <input
+// type="date">, donc rien à reformater).
+function selectedDeckDates(){
+  return { from: deckFromEl.value, to: deckToEl.value };
+}
+
+function isoDaysAgo(days){
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Les raccourcis ne font que remplir les deux champs : le filtre lui-même ne
+// lit jamais que ces champs, donc "personnalisé" n'est pas un mode à part —
+// c'est juste l'étiquette quand les dates ne correspondent à aucun raccourci.
+function applyDeckPeriodPreset(){
+  const value = deckPeriodSel.value;
+  if (value === "custom") return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (value === "all") {
+    deckFromEl.value = "";
+    deckToEl.value = "";
+  } else if (value === "season") {
+    deckFromEl.value = window.SWU.statsSeasonStart || "2026-07-11";
+    deckToEl.value = today;
+  } else {
+    deckFromEl.value = isoDaysAgo(Number(value));
+    deckToEl.value = today;
+  }
 }
 
 function colorDots(colors){
@@ -116,7 +158,7 @@ function priceHtml(d){
 function deckRowHtml(d){
   const matchesRow = d.matches.length ? `
     <tr class="deckrow-matches">
-      <td colspan="6">
+      <td colspan="7">
         <div class="badges-wrap">
           ${d.matches.map((m) => `<span class="badge" ${previewAttrs(m.set, m.number, m.role !== "Deck")}>${m.role}${m.count !== undefined ? `: ${m.count}x` : ""} ${m.name}${m.title ? " — " + m.title : ""} (${m.set || "?"}/${m.number || "?"})</span>`).join("")}
         </div>
@@ -130,6 +172,7 @@ function deckRowHtml(d){
         <div class="deck-name-line"><a href="https://swudb.com/deck/${d.deckId}" target="_blank" rel="noopener">${d.deckName}</a> <span class="muted">par ${d.authorName}</span></div>
         <div class="deck-leader-line"><span ${previewAttrs(d.leaderSet, d.leaderNumber, true)}>${d.leaderName || "?"}</span>${d.baseName ? ` / <span ${previewAttrs(d.baseSet, d.baseNumber, true)}>${d.baseName}</span>` : ""}</div>
       </td>
+      <td class="col-date">${fmtPublishDate(d.publishDate) || `<span class="muted">—</span>`}</td>
       <td class="col-curve">${manaCurveHtml(d.manaCurve)}</td>
       <td class="col-winrate">${metaBadgeHtml(d) || `<span class="muted">—</span>`}</td>
       <td class="col-price">${priceHtml(d)}</td>
@@ -152,7 +195,7 @@ function groupKeyFor(d){
 
 const DECKTABLE_HEAD = `
   <thead><tr>
-    <th>❤️</th><th>Couleurs</th><th>Deck</th><th>Courbe de mana</th><th>Winrate (ASH, Premier)</th><th>Prix (TCGPlayer)</th>
+    <th>❤️</th><th>Couleurs</th><th>Deck</th><th>Publié</th><th>Courbe de mana</th><th>Winrate (ASH, Premier)</th><th>Prix (TCGPlayer)</th>
   </tr></thead>`;
 
 // Clé de groupe -> replié ou non. Survit aux re-rendus (tri, ajout de decks
@@ -210,6 +253,7 @@ function selectedDeckColors(){
 async function fetchAndRenderDecks(silent = false) {
   const q = deckCardQ.value.trim();
   const colors = selectedDeckColors();
+  const { from, to } = selectedDeckDates();
   if (!silent) {
     deckSearchStatus.className = "status";
     deckSearchStatus.textContent = "Recherche…";
@@ -218,6 +262,8 @@ async function fetchAndRenderDecks(silent = false) {
   try {
     const params = new URLSearchParams({ q });
     if (colors.length) params.set("colors", colors.join(","));
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
     const res = await fetch(`/api/decks/by-card?${params}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -225,8 +271,8 @@ async function fetchAndRenderDecks(silent = false) {
     lastDeckResults = decks;
     if (!decks.length) {
       if (!silent) {
-        deckSearchStatus.textContent = (q || colors.length)
-          ? "Aucun deck ne correspond (carte, couleurs, ou base pas encore importée)."
+        deckSearchStatus.textContent = (q || colors.length || from || to)
+          ? "Aucun deck ne correspond (carte, couleurs, dates, ou base pas encore importée)."
           : "Base de decks locale vide — importe des decks d'abord.";
       }
       renderDeckResults(decks);
@@ -288,6 +334,9 @@ window.SWU_TABS.decks = function initDecksTab(){
   deckSortSel = $("#deckSort");
   deckGroupSel = $("#deckGroup");
   deckDbStatusEl = $("#deckDbStatus");
+  deckPeriodSel = $("#deckPeriod");
+  deckFromEl = $("#deckFrom");
+  deckToEl = $("#deckTo");
 
   deckSyncBtn.addEventListener("click", async () => {
     deckSyncBtn.disabled = true;
@@ -348,6 +397,15 @@ window.SWU_TABS.decks = function initDecksTab(){
     if (!btn) return;
     toggleGroupCollapse(Number(btn.dataset.groupIndex));
   });
+
+  deckPeriodSel.addEventListener("change", () => { applyDeckPeriodPreset(); searchDecksByCard(); });
+  // Toucher une date à la main sort du raccourci : l'étiquette doit suivre,
+  // sinon le select afficherait "30 derniers jours" pour une plage qui n'en est
+  // plus une.
+  [deckFromEl, deckToEl].forEach((el) => el.addEventListener("change", () => {
+    deckPeriodSel.value = (!deckFromEl.value && !deckToEl.value) ? "all" : "custom";
+    searchDecksByCard();
+  }));
 
   deckSearchBtn.addEventListener("click", searchDecksByCard);
   deckCardQ.addEventListener("keydown", (e) => { if (e.key === "Enter") searchDecksByCard(); });

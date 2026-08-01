@@ -851,15 +851,27 @@ function toResult(deck, matches) {
   };
 }
 
+// publishDate arrive de swudb.com en ISO UTC ("2026-07-06T19:09:09.9Z") et les
+// bornes du filtre en "YYYY-MM-DD" : comparer les 10 premiers caractères suffit
+// et reste juste, là où passer par Date() ferait basculer un deck publié le
+// soir dans le jour précédent selon le fuseau du serveur. Bornes incluses.
+function inDateRange(publishDate, from, to) {
+  if (!from && !to) return true;
+  const day = String(publishDate || "").slice(0, 10);
+  if (!day) return false; // un deck sans date ne peut pas satisfaire un filtre de dates
+  return (!from || day >= from) && (!to || day <= to);
+}
+
 // Separate multiple card names with a comma or a "+" to require all of them
 // (AND) in the same deck. An empty query lists every deck (e.g. to sort by
 // favorites without filtering by card).
-function findDecksByCard(query, colors) {
+function findDecksByCard(query, colors, from, to) {
   const decks = loadDecks();
   const needles = query.split(/[,+]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
   const wantedColors = (colors || []).map((c) => c.trim()).filter(Boolean);
   const results = [];
   for (const deck of Object.values(decks)) {
+    if (!inDateRange(deck.publishDate, from, to)) continue;
     if (wantedColors.length) {
       const deckColors = deck.colors || [];
       if (!wantedColors.every((c) => deckColors.includes(c))) continue;
@@ -1088,8 +1100,13 @@ function handleRequest(req, res) {
   if (url.pathname === "/api/decks/by-card") {
     const q = url.searchParams.get("q") || "";
     const colors = (url.searchParams.get("colors") || "").split(",").filter(Boolean);
+    // Bornes "YYYY-MM-DD" ; toute autre forme est ignorée plutôt que de filtrer
+    // au hasard (une comparaison de chaînes avec "12/07/2026" ne renverrait rien).
+    const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : "");
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ decks: findDecksByCard(q, colors) }));
+    res.end(JSON.stringify({
+      decks: findDecksByCard(q, colors, day(url.searchParams.get("from")), day(url.searchParams.get("to"))),
+    }));
     return;
   }
 

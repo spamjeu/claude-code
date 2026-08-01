@@ -57,6 +57,26 @@ jouent la carte X" :
   dont au moins une carte matche le nom tapé, avec un lien vers la page du deck sur
   SWUDB.
 
+### Date de publication et filtre par période
+
+La colonne "Publié" reprend le champ `publishDate` de swudb.com (déjà stocké
+en base, aucun appel supplémentaire). Comme l'import "top" ratisse le
+classement de tous les temps, la base mélange des decks récents et des decks
+d'anciens sets : le filtre de dates sert surtout à isoler ce qui est
+d'actualité.
+
+- Deux bornes `du` / `au` (incluses), envoyées au serveur en `from` / `to`
+  (`YYYY-MM-DD`) — toute autre forme est ignorée plutôt que de filtrer au
+  hasard.
+- Les raccourcis (7 / 30 / 90 derniers jours, depuis la sortie d'ASH) ne font
+  que **remplir ces deux champs** : le filtre ne lit jamais qu'eux, donc
+  modifier une date à la main bascule simplement l'étiquette sur
+  "Personnalisé".
+- Côté serveur, la comparaison se fait sur les 10 premiers caractères de la
+  date ISO plutôt que via `Date()` : un deck publié en soirée UTC changerait
+  sinon de jour selon le fuseau du serveur.
+- Un tri "date (récents d'abord)" complète les tris existants.
+
 ### Prix estimé du deck (TCGPlayer, via swudb.com)
 
 La colonne "Prix (TCGPlayer)" du tableau de decks reprend directement le champ
