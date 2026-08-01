@@ -284,14 +284,15 @@ window.SWU_TABS.galactic = function initGalactic() {
     // panneau vide.
     if (selectedKey && !occurrences.some((o) => occurrenceKey(o) === selectedKey)) selectedKey = null;
 
-    const drawBoard = () => {
+    // flash: seulement quand les données ont bougé. Sélectionner un joueur
+    // redessine aussi l'échelle, mais faire clignoter les lignes à chaque clic
+    // est juste pénible — et le flash ne voudrait plus rien dire.
+    const drawBoard = (flash) => {
       const board = document.createElement("ol");
       board.className = "gal-board";
       occurrences.forEach((occ) => {
         const row = renderRow(occ, showEvent, select);
-        // Le rendu n'a lieu que sur données réellement neuves (cf. refresh) :
-        // un flash discret rend le changement visible sans avoir à comparer.
-        if (!firstRender) {
+        if (flash) {
           row.classList.add("gal-updated");
           setTimeout(() => row.classList.remove("gal-updated"), 2000);
         }
@@ -311,7 +312,7 @@ window.SWU_TABS.galactic = function initGalactic() {
 
     function select(key) {
       selectedKey = key;
-      drawBoard();
+      drawBoard(false);
       drawDetail();
       // En une colonne (mobile), le panneau est sous l'échelle : sans ça, un
       // clic semble ne rien faire puisque le détail s'ouvre hors écran.
@@ -320,7 +321,7 @@ window.SWU_TABS.galactic = function initGalactic() {
       }
     }
 
-    drawBoard();
+    drawBoard(!firstRender);
     drawDetail();
     firstRender = false;
     document.title = anyLive ? `🔴 ${baseTitle}` : baseTitle;
